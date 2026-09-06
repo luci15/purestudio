@@ -1098,11 +1098,6 @@ td.num, th.num{text-align:right;}
       <div class="section-label">Terms &amp; conditions</div>
       <div class="field"><label for="sTerms">One per line</label><textarea id="sTerms" rows="3"></textarea></div>
 
-      <div class="section-label">Cloud Sync (Supabase)</div>
-      <div class="field"><label for="sSbUrl">Supabase Project URL</label><input type="text" id="sSbUrl" placeholder="https://xyzcompany.supabase.co"></div>
-      <div class="field"><label for="sSbKey">Supabase Anon Public Key</label><input type="password" id="sSbKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."></div>
-      <div style="font-size:11.5px;color:var(--ink-muted);margin-top:-6px;margin-bottom:8px;">Can also be set in <code>config.js</code>. Enables instant cloud backup &amp; sync across devices.</div>
-
       <div class="modal-actions">
         <button type="button" class="btn ghost" id="settingsCancel">Cancel</button>
         <button type="submit" class="btn primary" id="settingsSave">Save details</button>
@@ -2282,7 +2277,6 @@ td.num, th.num{text-align:right;}
     $('sBankIfsc').value = business.bankIfsc || '';
     $('sUpi').value = business.upiHandle || '';
     $('sTerms').value = business.terms || '';
-    if (window.populateSupabaseSettings) window.populateSupabaseSettings();
   }
   function openSettingsModal(){ fillSettingsForm(); $('settingsOverlay').hidden = false; }
   function closeSettingsModal(){ $('settingsOverlay').hidden = true; }
@@ -2312,7 +2306,6 @@ td.num, th.num{text-align:right;}
       upiHandle: $('sUpi').value.trim(),
       terms: $('sTerms').value
     };
-    if (window.saveSupabaseSettings) window.saveSupabaseSettings();
     db.collection('settings').doc('business').set(data).then(function(){ closeSettingsModal(); renderAll(); }).catch(function(err){ console.error(err); });
   });
 
