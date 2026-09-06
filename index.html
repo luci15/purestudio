@@ -2341,7 +2341,7 @@ td.num, th.num{text-align:right;}
     } catch(err){ downloadsCap = null; }
     
     if(!db){
-      db = (typeof getPureStudioDb === 'function' && getPureStudioDb()) || (window.getPureStudioDb && window.getPureStudioDb()) || createLocalDb();
+      db = (typeof getPureStudioDb === 'function' && (await getPureStudioDb())) || (window.getPureStudioDb && (await window.getPureStudioDb())) || createLocalDb();
     }
     if($('dbBanner')){
       $('dbBanner').className = 'banner';

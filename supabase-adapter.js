@@ -178,9 +178,30 @@
     };
   }
 
+  async function fetchVercelConfig() {
+    try {
+      var res = await fetch('/api/config');
+      if (res.ok) {
+        var data = await res.json();
+        if (data && data.url && data.anonKey) {
+          window.SUPABASE_CONFIG = {
+            url: data.url,
+            anonKey: data.anonKey
+          };
+          return { url: data.url.trim(), key: data.anonKey.trim() };
+        }
+      }
+    } catch(e) {}
+    return null;
+  }
+
   // Global helper to initialize or get DB
-  window.getPureStudioDb = function() {
+  window.getPureStudioDb = async function() {
     var creds = getCredentials();
+    if (!creds.url || !creds.key) {
+      var vercelCreds = await fetchVercelConfig();
+      if (vercelCreds) creds = vercelCreds;
+    }
     if (creds.url && creds.key) {
       try {
         var db = createSupabaseDb(creds.url, creds.key);
