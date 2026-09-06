@@ -245,7 +245,7 @@ td.num, th.num{text-align:right;}
 .preview-modal{max-width:780px;padding:22px;}
 .preview-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap;}
 .preview-toolbar h2{font-size:16px;}
-.invoice-sheet{background:#fff;color:#1c1a17;border:1px solid #ddd6c8;border-radius:10px;padding:26px;font-size:12.5px;line-height:1.5;}
+.invoice-sheet{background:transparent !important;color:#1c1a17;border:none !important;border-radius:0 !important;padding:0 !important;font-size:12.5px;line-height:1.5;box-shadow:none !important;}
 .invoice-sheet .inv-note{text-align:center;font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;color:#8a8072;border-bottom:1px solid #e4ddd0;padding-bottom:10px;margin-bottom:10px;}
 .invoice-sheet .inv-title{text-align:center;font-size:17px;font-weight:700;font-family:"Fraunces",serif;border-bottom:2px solid #1c1a17;padding-bottom:10px;margin-bottom:16px;}
 .invoice-sheet .inv-header{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:16px;}
@@ -270,12 +270,7 @@ td.num, th.num{text-align:right;}
 .invoice-sheet .inv-bottom div div{margin-bottom:2px;}
 .invoice-sheet .inv-terms li{margin-bottom:3px;color:#4a443a;}
 .invoice-sheet .inv-thanks{text-align:right;font-family:"Fraunces",serif;font-style:italic;font-size:14px;margin-top:14px;}
-@media print{
-  body *{visibility:hidden;}
-  #invoiceSheet, #invoiceSheet *{visibility:visible;}
-  #invoiceSheet{position:absolute;left:0;top:0;width:100%;border:none;border-radius:0;padding:14px;}
-  .no-print{display:none !important;}
-}
+/* print block consolidated */
 
 @media (max-width:760px){
   .sidebar{display:none;}
@@ -563,24 +558,7 @@ td.num, th.num{text-align:right;}
   padding-top: 18px;
 }
 
-@media print {
-  @page {
-    size: A4 portrait;
-    margin: 6mm;
-  }
-  body * { visibility: hidden; }
-  .exact-invoice-paper, .exact-invoice-paper * { visibility: visible; }
-  .exact-invoice-paper {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 4mm 6mm;
-    box-shadow: none;
-  }
-  .no-print { display: none !important; }
-}
+/* print block consolidated */
 
 
 /* ===== HIGH CONTRAST INVOICE STYLES (DARK/LIGHT MODE PROOF) ===== */
@@ -594,11 +572,13 @@ td.num, th.num{text-align:right;}
 }
 
 .invoice-sheet-container {
-  background: #d8d4cc !important;
-  padding: 24px 16px !important;
+  background: #e8e4dc !important;
+  padding: 16px 8px !important;
   display: flex !important;
   justify-content: center !important;
   overflow-x: auto !important;
+  border-radius: 8px !important;
+  border: none !important;
 }
 
 .exact-invoice-paper {
@@ -773,20 +753,69 @@ td.num, th.num{text-align:right;}
 }
 
 @media print {
-  @page { size: A4 portrait; margin: 6mm; }
-  body * { visibility: hidden !important; }
-  .exact-invoice-paper, .exact-invoice-paper * {
-    visibility: visible !important;
-    color: #000000 !important;
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  body > * {
+    display: none !important;
+  }
+  #previewOverlay {
+    display: block !important;
+    position: static !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+  .preview-modal {
+    display: block !important;
+    position: static !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  #invoiceSheet,
+  .invoice-sheet,
+  .invoice-sheet-container {
+    display: block !important;
+    position: static !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    box-shadow: none !important;
   }
   .exact-invoice-paper {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    display: block !important;
+    position: static !important;
     width: 100% !important;
-    margin: 0 !important;
-    padding: 2mm 4mm !important;
+    max-width: 210mm !important;
+    min-height: auto !important;
+    max-height: 290mm !important;
+    margin: 0 auto !important;
+    padding: 6mm 10mm 6mm !important;
+    box-sizing: border-box !important;
     box-shadow: none !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-inside: avoid !important;
+    break-after: avoid !important;
   }
 }
 
@@ -1027,11 +1056,32 @@ td.num, th.num{text-align:right;}
       </div>
       <div class="items-foot"><button type="button" class="btn ghost small" id="btnAddItem">+ Add line</button></div>
 
+      <div class="section-label">Place of Supply / State</div>
+      <div class="field-row">
+        <div class="field">
+          <label for="iState">State / Tax Type</label>
+          <select id="iState">
+            <option value="Maharashtra" selected>Maharashtra (Intra-State: CGST + SGST)</option>
+            <option value="Other">Other State (Inter-State: IGST 18%)</option>
+          </select>
+        </div>
+      </div>
+
       <div class="section-label">Charges &amp; tax</div>
-      <div class="field-row three">
+      <div class="field-row three" id="rowMaharashtraTax">
         <div class="field"><label for="iOther">Other charges</label><input type="number" id="iOther" min="0" step="0.01" value="0"></div>
         <div class="field"><label for="iCgst">CGST %</label><input type="number" id="iCgst" min="0" step="0.01" value="9"></div>
         <div class="field"><label for="iSgst">SGST %</label><input type="number" id="iSgst" min="0" step="0.01" value="9"></div>
+      </div>
+      <div class="field-row" id="rowOtherTax" hidden>
+        <div class="field"><label for="iOther2">Other charges</label><input type="number" id="iOther2" min="0" step="0.01" value="0"></div>
+        <div class="field">
+          <label for="iIgst">Tax (IGST %)</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="number" id="iIgst" min="0" step="0.01" value="18" style="flex:1;">
+            <button type="button" class="btn small" id="btnIgst18" style="padding:6px 14px; font-weight:700; background:var(--accent-tint); color:var(--accent-strong); border-color:var(--accent); cursor:pointer;">18% IGST</button>
+          </div>
+        </div>
       </div>
 
       <div class="summary-box" id="invoiceSummary"></div>
@@ -1447,14 +1497,33 @@ td.num, th.num{text-align:right;}
     var subtotal = items.reduce(function(s,it){ return s + (Number(it.qty)||0) * (Number(it.unitPrice)||0); }, 0);
     var otherCharges = Number(data.otherCharges)||0;
     var taxableBase = subtotal + otherCharges;
-    var cgstPct = data.cgstPct != null ? Number(data.cgstPct) : business.cgstPct;
-    var sgstPct = data.sgstPct != null ? Number(data.sgstPct) : business.sgstPct;
+    var isOtherState = data.state === 'Other' || (data.igstPct != null && Number(data.igstPct) > 0);
+    var igstPct = isOtherState ? (data.igstPct != null ? Number(data.igstPct) : 18) : 0;
+    var cgstPct = isOtherState ? 0 : (data.cgstPct != null ? Number(data.cgstPct) : business.cgstPct);
+    var sgstPct = isOtherState ? 0 : (data.sgstPct != null ? Number(data.sgstPct) : business.sgstPct);
+    var igstAmt = taxableBase * igstPct / 100;
     var cgstAmt = taxableBase * cgstPct / 100;
     var sgstAmt = taxableBase * sgstPct / 100;
-    var rawTotal = taxableBase + cgstAmt + sgstAmt;
+    var taxTotal = isOtherState ? igstAmt : (cgstAmt + sgstAmt);
+    var rawTotal = taxableBase + taxTotal;
     var total = Math.round(rawTotal);
     var roundOff = total - rawTotal;
-    return {subtotal:subtotal, otherCharges:otherCharges, cgstPct:cgstPct, sgstPct:sgstPct, cgstAmt:cgstAmt, sgstAmt:sgstAmt, taxTotal:cgstAmt+sgstAmt, rawTotal:rawTotal, roundOff:roundOff, total:total};
+    return {
+      subtotal: subtotal,
+      otherCharges: otherCharges,
+      state: data.state || (isOtherState ? 'Other' : 'Maharashtra'),
+      isOtherState: isOtherState,
+      igstPct: igstPct,
+      igstAmt: igstAmt,
+      cgstPct: cgstPct,
+      sgstPct: sgstPct,
+      cgstAmt: cgstAmt,
+      sgstAmt: sgstAmt,
+      taxTotal: taxTotal,
+      rawTotal: rawTotal,
+      roundOff: roundOff,
+      total: total
+    };
   }
   function invoiceTotal(inv){
     return inv && inv.total != null ? Number(inv.total) : computeTotals(inv || {}).total;
@@ -1782,22 +1851,36 @@ td.num, th.num{text-align:right;}
     }).join('');
   }
   function readFormValues(){
+    var state = ($('iState') && $('iState').value) || 'Maharashtra';
+    var isOther = state === 'Other';
+    var otherCharges = isOther ? (parseFloat($('iOther2').value) || 0) : (parseFloat($('iOther').value) || 0);
+    var igstPct = isOther ? (parseFloat($('iIgst').value) || 0) : 0;
+    var cgstPct = isOther ? 0 : (parseFloat($('iCgst').value) || 0);
+    var sgstPct = isOther ? 0 : (parseFloat($('iSgst').value) || 0);
     return {
       items: formItems,
-      otherCharges: parseFloat($('iOther').value) || 0,
-      cgstPct: parseFloat($('iCgst').value) || 0,
-      sgstPct: parseFloat($('iSgst').value) || 0
+      state: state,
+      otherCharges: otherCharges,
+      igstPct: igstPct,
+      cgstPct: cgstPct,
+      sgstPct: sgstPct
     };
   }
   function recalcSummary(){
     var t = computeTotals(readFormValues());
+    var taxRows = '';
+    if (t.isOtherState) {
+      taxRows = '<div class="summary-row"><span>IGST @ '+t.igstPct+'%</span><span class="mono">'+money(t.igstAmt)+'</span></div>';
+    } else {
+      taxRows = '<div class="summary-row"><span>CGST @ '+t.cgstPct+'%</span><span class="mono">'+money(t.cgstAmt)+'</span></div>'+
+                '<div class="summary-row"><span>SGST @ '+t.sgstPct+'%</span><span class="mono">'+money(t.sgstAmt)+'</span></div>';
+    }
     $('invoiceSummary').innerHTML =
       '<div class="summary-row"><span>Subtotal</span><span class="mono">'+money(t.subtotal)+'</span></div>'+
       '<div class="summary-row"><span>Other charges</span><span class="mono">'+money(t.otherCharges)+'</span></div>'+
-      '<div class="summary-row"><span>CGST @ '+t.cgstPct+'%</span><span class="mono">'+money(t.cgstAmt)+'</span></div>'+
-      '<div class="summary-row"><span>SGST @ '+t.sgstPct+'%</span><span class="mono">'+money(t.sgstAmt)+'</span></div>'+
+      taxRows +
       '<div class="summary-row"><span>Round off</span><span class="mono">'+(t.roundOff>=0?'+':'')+t.roundOff.toFixed(2)+'</span></div>'+
-      '<div class="summary-row" style="font-weight:700;"><span>Total tax</span><span class="mono">&#8377;'+((Number(t.cgstAmt)||0)+(Number(t.sgstAmt)||0)).toFixed(2)+'</span></div>'+
+      '<div class="summary-row" style="font-weight:700;"><span>Total tax</span><span class="mono">&#8377;'+t.taxTotal.toFixed(2)+'</span></div>'+
       '<div class="summary-row total"><span>Invoice value</span><span class="mono">'+money(t.total)+'</span></div>'+
       '<div class="summary-words">'+esc(numberToWordsIndian(t.total))+'</div>';
   }
@@ -1831,8 +1914,26 @@ td.num, th.num{text-align:right;}
     if(last) last.querySelector('.it-desc').focus();
     recalcSummary();
   });
-  ['iOther','iCgst','iSgst'].forEach(function(id){
-    $(id).addEventListener('input', recalcSummary);
+  function updateStateTaxVisibility(){
+    var isOther = $('iState').value === 'Other';
+    $('rowMaharashtraTax').hidden = isOther;
+    $('rowOtherTax').hidden = !isOther;
+    if(isOther){
+      if(!$('iIgst').value || $('iIgst').value == '0') $('iIgst').value = 18;
+      $('iOther2').value = $('iOther').value;
+    } else {
+      $('iOther').value = $('iOther2').value;
+    }
+    recalcSummary();
+  }
+  $('iState').addEventListener('change', updateStateTaxVisibility);
+  $('btnIgst18').addEventListener('click', function(){
+    $('iIgst').value = 18;
+    recalcSummary();
+  });
+  ['iOther','iCgst','iSgst','iOther2','iIgst'].forEach(function(id){
+    var el = $(id);
+    if(el) el.addEventListener('input', recalcSummary);
   });
 
   function updateClientHint(){
@@ -1856,9 +1957,14 @@ td.num, th.num{text-align:right;}
       $('iNumber').value = inv.number || '';
       $('iDate').value = inv.date || '';
       $('iStatus').value = inv.status || 'pending';
+      var isOther = inv.state === 'Other' || (inv.igstPct != null && Number(inv.igstPct) > 0);
+      $('iState').value = isOther ? 'Other' : 'Maharashtra';
       $('iOther').value = inv.otherCharges != null ? inv.otherCharges : 0;
+      $('iOther2').value = inv.otherCharges != null ? inv.otherCharges : 0;
       $('iCgst').value = inv.cgstPct != null ? inv.cgstPct : business.cgstPct;
       $('iSgst').value = inv.sgstPct != null ? inv.sgstPct : business.sgstPct;
+      $('iIgst').value = inv.igstPct != null ? inv.igstPct : 18;
+      updateStateTaxVisibility();
       formItems = (inv.items && inv.items.length) ? inv.items.map(function(it){ return Object.assign({}, it); }) : [blankItem()];
     } else {
       $('iClient').value = '';
@@ -1867,9 +1973,13 @@ td.num, th.num{text-align:right;}
       $('iNumber').value = String(invoices.length + 1) + '/' + fyLabel(new Date());
       $('iDate').value = new Date().toISOString().slice(0,10);
       $('iStatus').value = 'pending';
+      $('iState').value = 'Maharashtra';
       $('iOther').value = 0;
+      $('iOther2').value = 0;
       $('iCgst').value = business.cgstPct;
       $('iSgst').value = business.sgstPct;
+      $('iIgst').value = 18;
+      updateStateTaxVisibility();
       formItems = [blankItem()];
     }
     renderItemsRows();
@@ -1947,7 +2057,8 @@ td.num, th.num{text-align:right;}
       return;
     }
     var c = clientById(clientId);
-    var totalsInput = {items: validItems, otherCharges: parseFloat($('iOther').value)||0, cgstPct: parseFloat($('iCgst').value)||0, sgstPct: parseFloat($('iSgst').value)||0};
+    var totalsInput = readFormValues();
+    totalsInput.items = validItems;
     var t = computeTotals(totalsInput);
     var data = {
       clientId: clientId,
@@ -1956,12 +2067,16 @@ td.num, th.num{text-align:right;}
       date: $('iDate').value,
       status: $('iStatus').value,
       items: validItems,
+      state: totalsInput.state,
       otherCharges: t.otherCharges,
       cgstPct: t.cgstPct,
       sgstPct: t.sgstPct,
+      igstPct: t.igstPct,
       subtotal: t.subtotal,
       cgstAmt: t.cgstAmt,
       sgstAmt: t.sgstAmt,
+      igstAmt: t.igstAmt,
+      taxTotal: t.taxTotal,
       roundOff: t.roundOff,
       total: t.total
     };
@@ -2078,10 +2193,13 @@ td.num, th.num{text-align:right;}
                 '<table class="inv-calc-subtable">' +
                   '<tr><td class="lbl-cell">SUBTOTAL</td><td class="val-cell">&#8377;' + (Number(t.subtotal)||0).toFixed(2) + '</td></tr>' +
                   '<tr><td class="lbl-cell">OTHER CHARGES</td><td class="val-cell">&#8377;' + (Number(t.otherCharges)||0).toFixed(2) + '</td></tr>' +
-                  '<tr><td class="lbl-cell">CGST@' + t.cgstPct + '%</td><td class="val-cell">&#8377;' + (Number(t.cgstAmt)||0).toFixed(2) + '</td></tr>' +
-                  '<tr><td class="lbl-cell">SGST@' + t.sgstPct + '%</td><td class="val-cell">&#8377;' + (Number(t.sgstAmt)||0).toFixed(2) + '</td></tr>' +
+                  (t.isOtherState ? 
+                    '<tr><td class="lbl-cell">IGST@' + t.igstPct + '%</td><td class="val-cell">&#8377;' + (Number(t.igstAmt)||0).toFixed(2) + '</td></tr>' :
+                    ('<tr><td class="lbl-cell">CGST@' + t.cgstPct + '%</td><td class="val-cell">&#8377;' + (Number(t.cgstAmt)||0).toFixed(2) + '</td></tr>' +
+                     '<tr><td class="lbl-cell">SGST@' + t.sgstPct + '%</td><td class="val-cell">&#8377;' + (Number(t.sgstAmt)||0).toFixed(2) + '</td></tr>')
+                  ) +
                   '<tr><td class="lbl-cell">ROUND OFF</td><td class="val-cell">' + (t.roundOff >= 0 ? '&#8377;' : '-&#8377;') + Math.abs(t.roundOff).toFixed(2) + '</td></tr>' +
-                  '<tr><td class="lbl-cell" style="font-weight:800;">TOTAL TAX</td><td class="val-cell font-bold">&#8377;' + totalTax.toFixed(2) + '</td></tr>' +
+                  '<tr><td class="lbl-cell" style="font-weight:800;">TOTAL TAX</td><td class="val-cell font-bold">&#8377;' + t.taxTotal.toFixed(2) + '</td></tr>' +
                   '<tr class="grand-row"><td class="lbl-cell" style="font-size:11.5px; font-weight:900;">Invoice Value</td><td class="val-cell" style="font-size:12px; font-weight:900;">&#8377;' + Number(t.total).toFixed(2) + '</td></tr>' +
                 '</table>' +
               '</td>' +
@@ -2203,10 +2321,14 @@ td.num, th.num{text-align:right;}
     }
     totRow('Subtotal', moneyPdf(t.subtotal));
     totRow('Other charges', moneyPdf(t.otherCharges));
-    totRow('CGST @ ' + t.cgstPct + '%', moneyPdf(t.cgstAmt));
-    totRow('SGST @ ' + t.sgstPct + '%', moneyPdf(t.sgstAmt));
+    if (t.isOtherState) {
+      totRow('IGST @ ' + t.igstPct + '%', moneyPdf(t.igstAmt));
+    } else {
+      totRow('CGST @ ' + t.cgstPct + '%', moneyPdf(t.cgstAmt));
+      totRow('SGST @ ' + t.sgstPct + '%', moneyPdf(t.sgstAmt));
+    }
     totRow('Round off', (t.roundOff>=0?'+':'') + t.roundOff.toFixed(2));
-    totRow('Total tax', moneyPdf((Number(t.cgstAmt)||0) + (Number(t.sgstAmt)||0)));
+    totRow('Total tax', moneyPdf(t.taxTotal));
     doc.setDrawColor(20,18,15); doc.setLineWidth(0.5); doc.line(boxX, y-3, mRight, y-3); doc.setLineWidth(0.2);
     totRow('Invoice value', moneyPdf(t.total), true);
 
