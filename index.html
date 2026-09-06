@@ -605,12 +605,14 @@ td.num, th.num{text-align:right;}
   background: #ffffff !important;
   color: #000000 !important;
   width: 210mm !important;
-  min-height: 297mm !important;
-  padding: 10mm 12mm 12mm !important;
+  min-height: 275mm !important;
+  max-height: 295mm !important;
+  padding: 6mm 10mm 6mm !important;
+  box-sizing: border-box !important;
   box-shadow: 0 4px 24px rgba(0,0,0,0.3) !important;
   font-family: Arial, "Helvetica Neue", Helvetica, sans-serif !important;
-  font-size: 11px !important;
-  line-height: 1.35 !important;
+  font-size: 10.5px !important;
+  line-height: 1.3 !important;
 }
 
 .inv-top-jurisdiction {
@@ -642,7 +644,7 @@ td.num, th.num{text-align:right;}
   width: 100% !important;
   border-collapse: collapse !important;
   border: 1.5px solid #000000 !important;
-  margin-bottom: 6px !important;
+  margin-bottom: 4px !important;
   background: #ffffff !important;
 }
 
@@ -1795,6 +1797,7 @@ td.num, th.num{text-align:right;}
       '<div class="summary-row"><span>CGST @ '+t.cgstPct+'%</span><span class="mono">'+money(t.cgstAmt)+'</span></div>'+
       '<div class="summary-row"><span>SGST @ '+t.sgstPct+'%</span><span class="mono">'+money(t.sgstAmt)+'</span></div>'+
       '<div class="summary-row"><span>Round off</span><span class="mono">'+(t.roundOff>=0?'+':'')+t.roundOff.toFixed(2)+'</span></div>'+
+      '<div class="summary-row" style="font-weight:700;"><span>Total tax</span><span class="mono">&#8377;'+((Number(t.cgstAmt)||0)+(Number(t.sgstAmt)||0)).toFixed(2)+'</span></div>'+
       '<div class="summary-row total"><span>Invoice value</span><span class="mono">'+money(t.total)+'</span></div>'+
       '<div class="summary-words">'+esc(numberToWordsIndian(t.total))+'</div>';
   }
@@ -1999,7 +2002,7 @@ td.num, th.num{text-align:right;}
       '</tr>';
     }).join('');
 
-    var emptyRowCount = Math.max(0, 7 - items.length);
+    var emptyRowCount = Math.max(0, 2 - items.length);
     for(var er = 0; er < emptyRowCount; er++){
       itemRowsHtml += '<tr class="empty-row"><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>';
     }
@@ -2203,6 +2206,7 @@ td.num, th.num{text-align:right;}
     totRow('CGST @ ' + t.cgstPct + '%', moneyPdf(t.cgstAmt));
     totRow('SGST @ ' + t.sgstPct + '%', moneyPdf(t.sgstAmt));
     totRow('Round off', (t.roundOff>=0?'+':'') + t.roundOff.toFixed(2));
+    totRow('Total tax', moneyPdf((Number(t.cgstAmt)||0) + (Number(t.sgstAmt)||0)));
     doc.setDrawColor(20,18,15); doc.setLineWidth(0.5); doc.line(boxX, y-3, mRight, y-3); doc.setLineWidth(0.2);
     totRow('Invoice value', moneyPdf(t.total), true);
 
@@ -2247,13 +2251,18 @@ td.num, th.num{text-align:right;}
 
     if(window.html2pdf){
       var opt = {
-        margin:       [4, 4, 4, 4],
+        margin:       0,
         filename:     filename,
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        html2canvas:  { scale: 2, useCORS: true, letterRendering: true, scrollY: 0 },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak:    { mode: 'avoid-all' }
       };
-      window.html2pdf().set(opt).from(element).save();
+      var prevShadow = element.style.boxShadow;
+      element.style.boxShadow = 'none';
+      window.html2pdf().set(opt).from(element).save().then(function(){
+        element.style.boxShadow = prevShadow;
+      });
     } else {
       window.print();
     }
