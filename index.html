@@ -1056,18 +1056,16 @@ td.num, th.num{text-align:right;}
       </div>
       <div class="items-foot"><button type="button" class="btn ghost small" id="btnAddItem">+ Add line</button></div>
 
-      <div class="section-label">Place of Supply / State</div>
+      <div class="section-label">Charges &amp; tax</div>
       <div class="field-row">
         <div class="field">
-          <label for="iState">State / Tax Type</label>
+          <label for="iState">Place of Supply</label>
           <select id="iState">
-            <option value="Maharashtra" selected>Maharashtra (Intra-State: CGST + SGST)</option>
-            <option value="Other">Other State (Inter-State: IGST 18%)</option>
+            <option value="Maharashtra" selected>Maharashtra (CGST + SGST)</option>
+            <option value="Other">Other State (IGST)</option>
           </select>
         </div>
       </div>
-
-      <div class="section-label">Charges &amp; tax</div>
       <div class="field-row three" id="rowMaharashtraTax">
         <div class="field"><label for="iOther">Other charges</label><input type="number" id="iOther" min="0" step="0.01" value="0"></div>
         <div class="field"><label for="iCgst">CGST %</label><input type="number" id="iCgst" min="0" step="0.01" value="9"></div>
