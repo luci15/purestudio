@@ -5,6 +5,16 @@
 (function() {
   var activeClient = null;
   var STORAGE_PREFIX = 'purestudio_db_';
+  var listeners = {};
+
+  function notifyLocal(colName) {
+    if (!listeners[colName]) return;
+    var docs = getLocalDocs(colName);
+    var snap = { docs: docs.map(wrapDoc) };
+    listeners[colName].forEach(function(cb) {
+      try { cb(snap); } catch(e) { console.error(e); }
+    });
+  }
 
   function cleanUrl(rawUrl) {
     if (!rawUrl) return '';
@@ -81,13 +91,17 @@
       collection: function(colName) {
         return {
           onSnapshot: function(onNext, onError) {
+            if (!listeners[colName]) listeners[colName] = [];
+            listeners[colName].push(onNext);
+
             // 1. Immediately emit local docs so UI renders instantly with zero latency
             var localDocs = getLocalDocs(colName);
             if (localDocs && localDocs.length > 0) {
               try { onNext({ docs: localDocs.map(wrapDoc) }); } catch(e) {}
             }
 
-            // 2. Fetch fresh cloud data from Supabase
+            // 2. Fetch fresh cloud data from Supabase and merge (never let a slow/empty
+            // cloud response erase an optimistic local write that hasn't synced yet)
             function fetchAll() {
               client.from(colName).select('*').then(function(res) {
                 if (res.error) {
@@ -98,9 +112,12 @@
                     var docData = (row.data && typeof row.data === 'object') ? row.data : row;
                     return Object.assign({}, docData, { id: row.id });
                   });
-                  // Merge with local storage
-                  saveLocalDocs(colName, cloudDocs);
-                  onNext({ docs: cloudDocs.map(wrapDoc) });
+                  var cloudIds = {};
+                  cloudDocs.forEach(function(d) { cloudIds[d.id] = true; });
+                  var pendingLocal = getLocalDocs(colName).filter(function(d) { return !cloudIds[d.id]; });
+                  var merged = cloudDocs.concat(pendingLocal);
+                  saveLocalDocs(colName, merged);
+                  notifyLocal(colName);
                   updateSyncBadge('cloud');
                 }
               }).catch(function(err) {
@@ -124,6 +141,7 @@
               if (channel) {
                 try { client.removeChannel(channel); } catch(e) {}
               }
+              listeners[colName] = (listeners[colName]||[]).filter(function(cb) { return cb !== onNext; });
             };
           },
 
@@ -131,14 +149,16 @@
             var path = colName + '/' + docId;
             return {
               set: function(data) {
-                // Save locally first so user never loses data
+                // Save locally first and notify listeners immediately so the UI
+                // never appears to "do nothing" while the network call is in flight
                 var docs = getLocalDocs(colName);
                 var docData = Object.assign({}, data, { id: docId });
                 var idx = docs.findIndex(function(d) { return d.id === docId; });
                 if (idx >= 0) docs[idx] = docData; else docs.push(docData);
                 saveLocalDocs(colName, docs);
+                notifyLocal(colName);
 
-                // Sync to Supabase
+                // Sync to Supabase in the background
                 return client.from(colName).upsert({ id: docId, data: data }).then(function(res) {
                   if (res.error) {
                     console.error('Supabase set error:', res.error);
@@ -158,6 +178,7 @@
                   docs.push(Object.assign({}, data, { id: docId }));
                 }
                 saveLocalDocs(colName, docs);
+                notifyLocal(colName);
 
                 return client.from(colName).upsert({ id: docId, data: data }).catch(function(err) {
                   console.warn('Supabase update error (saved locally):', err);
@@ -168,6 +189,7 @@
                 var docs = getLocalDocs(colName);
                 docs = docs.filter(function(d) { return d.id !== docId; });
                 saveLocalDocs(colName, docs);
+                notifyLocal(colName);
 
                 return client.from(colName).delete().eq('id', docId).catch(function(err) {
                   console.warn('Supabase delete error (saved locally):', err);
@@ -212,10 +234,11 @@
             var docId = 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5);
             var docData = Object.assign({}, data, { id: docId });
 
-            // 1. Immediately save to local docs
+            // 1. Immediately save to local docs and notify listeners
             var docs = getLocalDocs(colName);
             docs.push(docData);
             saveLocalDocs(colName, docs);
+            notifyLocal(colName);
 
             // 2. Sync to Supabase in background
             return client.from(colName).upsert({ id: docId, data: data }).then(function(res) {
