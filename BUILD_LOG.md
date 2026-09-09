@@ -1,5 +1,15 @@
 # Build Log
 
+## 2026-09-09 — Cash invoice total label + auto-preview on save
+
+- Cash Invoice's grand total was mislabeled "Amount Received" (a payment-tracking term
+  that doesn't apply to cash entries) — renamed to "Invoice Value" to match the GST
+  invoice's own terminology.
+- Saving a GST invoice or a cash entry (add or edit) now automatically opens its
+  Print/Download/WhatsApp/Email preview right after the form closes, instead of just
+  returning to the list. Closing the preview leaves the normal "+ New invoice"/"+ New
+  cash entry" buttons usable as before. Verified with Playwright.
+
 ## 2026-09-09 — Cash Invoice document
 
 Cash Dealings entries can now be previewed/printed/downloaded/shared exactly like a
