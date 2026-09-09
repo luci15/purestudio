@@ -1,5 +1,49 @@
 # Build Log
 
+## 2026-09-09 — Cash Invoice document
+
+Cash Dealings entries can now be previewed/printed/downloaded/shared exactly like a
+GST invoice, using the same paper layout — except the header reads **"Cash Invoice"**
+instead of "Tax Invoice", there's no CGST/SGST/IGST breakdown or bank/payment details
+section (cash has neither), "BILL TO" becomes "RECEIVED FROM" with just name + phone
+(matching what's actually collected for cash), and a footer note clarifies it isn't a
+GST tax invoice. Reused the exact same overlay, Print/Download PDF/WhatsApp/Email
+buttons, and the business's logo/letterhead — the preview code now branches on
+`previewKind` ('invoice' | 'cash') instead of being invoice-only. Verified with a
+Playwright run (title, cash number, client name/phone, amount, and absence of any
+GST rows all present) plus a regression pass confirming the GST invoice preview is
+unaffected.
+
+Also hoisted the ~370KB inline base64 logo fallback out of `openPreview` into a
+shared `getLogoHtml()` so it isn't duplicated a second time for the new cash preview.
+
+## 2026-09-09 — Save reliability + modal UX fixes
+
+Reported: editing an existing invoice doesn't save; a deleted client/invoice reappears
+after a refresh ("maybe supabase is not catching it"); the invoice/client form closes
+if you click outside it instead of only via Cancel.
+
+- **Modal backdrop click removed** on the client, invoice, cash entry, and settings
+  forms — they now only close via Cancel (or the drawer's own X). Preview stays
+  click-outside-to-close since it holds no unsaved input. Verified with Playwright.
+- **Root cause of the save/delete bugs**: `supabase-adapter.js`'s cloud-fetch merge
+  logic used "does this id exist in the cloud response" to decide what to keep. If a
+  write or delete hadn't fully round-tripped yet (or failed) by the time the next
+  cloud fetch ran (a realtime event, or the initial load), that fetch's stale server
+  state silently overwrote the correct local one — an edit would look saved for a
+  moment then quietly revert, and a deleted row could reappear.
+  Fixed by tracking pending writes/deletes per collection (persisted to
+  `localStorage`, not just in memory) that always win over a cloud fetch until the
+  Supabase call actually confirms; confirmed pending writes/deletes are opportunistically
+  retried on every later cloud fetch. Also fixed `update()` uploading only the partial
+  patch to Supabase (which — since `upsert` replaces the whole jsonb column — was
+  silently wiping fields like `createdAt` that weren't part of the edit).
+  Verified the merge logic in isolation (can't reach the user's live Supabase project
+  from here) and ran a full add/edit/delete/refresh regression against the
+  local-storage backend — all still correct.
+- Save/delete failures now surface a "kept locally, will retry" banner instead of
+  failing silently (via a `purestudio:sync-error` event from the adapter).
+
 ## 2026-09-07 — Client dev-brief punch list (12 items)
 
 Source: `Pure_Studio_Billing_Software_Changes - Changes Required.pdf`. Verified with an

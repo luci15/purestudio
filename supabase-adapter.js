@@ -16,6 +16,70 @@
     });
   }
 
+  function reportSyncError(action, colName, err) {
+    console.warn('[Pure Studio] Supabase ' + action + ' error on ' + colName + ' (kept locally):', err);
+    try {
+      window.dispatchEvent(new CustomEvent('purestudio:sync-error', {
+        detail: { action: action, collection: colName, message: (err && err.message) ? err.message : String(err) }
+      }));
+    } catch(e) {}
+  }
+
+  // Pending writes/deletes are the source of truth until a Supabase round-trip
+  // confirms them. Without this, a slow/failed cloud write could be silently
+  // clobbered by the next cloud fetch (postgres_changes realtime, or a page
+  // reload's initial fetchAll) — the exact "edit doesn't save" / "delete comes
+  // back after refresh" bug. Persisted to localStorage so it survives a reload
+  // too, not just the in-memory session.
+  function getPending(kind, colName) {
+    try {
+      var raw = localStorage.getItem('purestudio_pending_' + kind + '_' + colName);
+      return raw ? JSON.parse(raw) : {};
+    } catch(e) { return {}; }
+  }
+  function setPending(kind, colName, obj) {
+    try { localStorage.setItem('purestudio_pending_' + kind + '_' + colName, JSON.stringify(obj)); } catch(e) {}
+  }
+  function markPendingWrite(colName, docId, data) {
+    var pw = getPending('write', colName);
+    pw[docId] = data;
+    setPending('write', colName, pw);
+    var pd = getPending('delete', colName);
+    if (pd[docId]) { delete pd[docId]; setPending('delete', colName, pd); }
+  }
+  function clearPendingWrite(colName, docId) {
+    var pw = getPending('write', colName);
+    if (pw[docId] !== undefined) { delete pw[docId]; setPending('write', colName, pw); }
+  }
+  function markPendingDelete(colName, docId) {
+    var pd = getPending('delete', colName);
+    pd[docId] = true;
+    setPending('delete', colName, pd);
+    var pw = getPending('write', colName);
+    if (pw[docId] !== undefined) { delete pw[docId]; setPending('write', colName, pw); }
+  }
+  function clearPendingDelete(colName, docId) {
+    var pd = getPending('delete', colName);
+    if (pd[docId]) { delete pd[docId]; setPending('delete', colName, pd); }
+  }
+  // Opportunistic retry: called whenever we successfully reach Supabase for a
+  // collection, so a write/delete that failed earlier (offline blip, etc.) gets
+  // another attempt without the user having to redo anything.
+  function flushPending(client, colName) {
+    var pw = getPending('write', colName);
+    var pd = getPending('delete', colName);
+    Object.keys(pw).forEach(function(id) {
+      client.from(colName).upsert({ id: id, data: pw[id] }).then(function(res) {
+        if (!res.error) clearPendingWrite(colName, id);
+      }).catch(function(){});
+    });
+    Object.keys(pd).forEach(function(id) {
+      client.from(colName).delete().eq('id', id).then(function(res) {
+        if (!res.error) clearPendingDelete(colName, id);
+      }).catch(function(){});
+    });
+  }
+
   function cleanUrl(rawUrl) {
     if (!rawUrl) return '';
     var url = rawUrl.trim();
@@ -100,8 +164,9 @@
               try { onNext({ docs: localDocs.map(wrapDoc) }); } catch(e) {}
             }
 
-            // 2. Fetch fresh cloud data from Supabase and merge (never let a slow/empty
-            // cloud response erase an optimistic local write that hasn't synced yet)
+            // 2. Fetch fresh cloud data from Supabase and reconcile with anything
+            // still pending — a pending write always overrides the cloud value for
+            // that id, and a pending delete always excludes it, until confirmed.
             function fetchAll() {
               client.from(colName).select('*').then(function(res) {
                 if (res.error) {
@@ -112,13 +177,20 @@
                     var docData = (row.data && typeof row.data === 'object') ? row.data : row;
                     return Object.assign({}, docData, { id: row.id });
                   });
+                  var pw = getPending('write', colName);
+                  var pd = getPending('delete', colName);
+                  cloudDocs = cloudDocs
+                    .filter(function(d) { return !pd[d.id]; })
+                    .map(function(d) { return pw[d.id] ? Object.assign({}, pw[d.id], { id: d.id }) : d; });
                   var cloudIds = {};
                   cloudDocs.forEach(function(d) { cloudIds[d.id] = true; });
-                  var pendingLocal = getLocalDocs(colName).filter(function(d) { return !cloudIds[d.id]; });
-                  var merged = cloudDocs.concat(pendingLocal);
-                  saveLocalDocs(colName, merged);
+                  Object.keys(pw).forEach(function(id) {
+                    if (!cloudIds[id] && !pd[id]) cloudDocs.push(Object.assign({}, pw[id], { id: id }));
+                  });
+                  saveLocalDocs(colName, cloudDocs);
                   notifyLocal(colName);
                   updateSyncBadge('cloud');
+                  flushPending(client, colName);
                 }
               }).catch(function(err) {
                 console.warn('Supabase fetch exception:', err);
@@ -156,32 +228,49 @@
                 var idx = docs.findIndex(function(d) { return d.id === docId; });
                 if (idx >= 0) docs[idx] = docData; else docs.push(docData);
                 saveLocalDocs(colName, docs);
+                markPendingWrite(colName, docId, docData);
                 notifyLocal(colName);
 
                 // Sync to Supabase in the background
                 return client.from(colName).upsert({ id: docId, data: data }).then(function(res) {
                   if (res.error) {
-                    console.error('Supabase set error:', res.error);
+                    reportSyncError('save', colName, res.error);
+                  } else {
+                    clearPendingWrite(colName, docId);
                   }
                   return res;
                 }).catch(function(err) {
-                  console.warn('Supabase network error (saved locally):', err);
+                  reportSyncError('save', colName, err);
                 });
               },
 
               update: function(data) {
                 var docs = getLocalDocs(colName);
                 var idx = docs.findIndex(function(d) { return d.id === docId; });
+                var merged;
                 if (idx >= 0) {
-                  docs[idx] = Object.assign({}, docs[idx], data, { id: docId });
+                  merged = Object.assign({}, docs[idx], data, { id: docId });
+                  docs[idx] = merged;
                 } else {
-                  docs.push(Object.assign({}, data, { id: docId }));
+                  merged = Object.assign({}, data, { id: docId });
+                  docs.push(merged);
                 }
                 saveLocalDocs(colName, docs);
+                markPendingWrite(colName, docId, merged);
                 notifyLocal(colName);
 
-                return client.from(colName).upsert({ id: docId, data: data }).catch(function(err) {
-                  console.warn('Supabase update error (saved locally):', err);
+                // Upsert the full merged record (not just the partial patch) so a
+                // field this update didn't touch (e.g. createdAt) isn't wiped from
+                // the cloud row — Supabase upsert replaces the whole jsonb column.
+                return client.from(colName).upsert({ id: docId, data: merged }).then(function(res) {
+                  if (res.error) {
+                    reportSyncError('save', colName, res.error);
+                  } else {
+                    clearPendingWrite(colName, docId);
+                  }
+                  return res;
+                }).catch(function(err) {
+                  reportSyncError('save', colName, err);
                 });
               },
 
@@ -189,10 +278,18 @@
                 var docs = getLocalDocs(colName);
                 docs = docs.filter(function(d) { return d.id !== docId; });
                 saveLocalDocs(colName, docs);
+                markPendingDelete(colName, docId);
                 notifyLocal(colName);
 
-                return client.from(colName).delete().eq('id', docId).catch(function(err) {
-                  console.warn('Supabase delete error (saved locally):', err);
+                return client.from(colName).delete().eq('id', docId).then(function(res) {
+                  if (res.error) {
+                    reportSyncError('delete', colName, res.error);
+                  } else {
+                    clearPendingDelete(colName, docId);
+                  }
+                  return res;
+                }).catch(function(err) {
+                  reportSyncError('delete', colName, err);
                 });
               },
 
@@ -238,16 +335,19 @@
             var docs = getLocalDocs(colName);
             docs.push(docData);
             saveLocalDocs(colName, docs);
+            markPendingWrite(colName, docId, docData);
             notifyLocal(colName);
 
             // 2. Sync to Supabase in background
             return client.from(colName).upsert({ id: docId, data: data }).then(function(res) {
               if (res.error) {
-                console.warn('Supabase add sync error (saved locally):', res.error.message);
+                reportSyncError('add', colName, res.error);
+              } else {
+                clearPendingWrite(colName, docId);
               }
               return { id: docId };
             }).catch(function(err) {
-              console.warn('Supabase add network error (saved locally):', err);
+              reportSyncError('add', colName, err);
               return { id: docId };
             });
           }
@@ -258,34 +358,76 @@
         var parts = docPath.split('/');
         var colName = parts[0];
         var docId = parts[1];
+        var listenerKey = 'doc:' + docPath;
         return {
           set: function(data) {
-            try {
-              localStorage.setItem(STORAGE_PREFIX + docPath, JSON.stringify(data));
-            } catch(e) {}
+            var docData = Object.assign({}, data, { id: docId });
+            try { localStorage.setItem(STORAGE_PREFIX + docPath, JSON.stringify(docData)); } catch(e) {}
+            markPendingWrite(listenerKey, docId, docData);
+            notifyLocal(listenerKey);
 
-            return client.from(colName).upsert({ id: docId, data: data }).catch(function(err) {
-              console.warn('Supabase doc set error:', err);
+            return client.from(colName).upsert({ id: docId, data: data }).then(function(res) {
+              if (res.error) {
+                reportSyncError('save', colName, res.error);
+              } else {
+                clearPendingWrite(listenerKey, docId);
+              }
+              return res;
+            }).catch(function(err) {
+              reportSyncError('save', colName, err);
             });
           },
           update: function(data) {
-            return client.from(colName).upsert({ id: docId, data: data }).catch(function(err) {
-              console.warn('Supabase doc update error:', err);
+            var existingRaw = null;
+            try { existingRaw = JSON.parse(localStorage.getItem(STORAGE_PREFIX + docPath) || 'null'); } catch(e) {}
+            var merged = Object.assign({}, existingRaw, data, { id: docId });
+            try { localStorage.setItem(STORAGE_PREFIX + docPath, JSON.stringify(merged)); } catch(e) {}
+            markPendingWrite(listenerKey, docId, merged);
+            notifyLocal(listenerKey);
+
+            return client.from(colName).upsert({ id: docId, data: merged }).then(function(res) {
+              if (res.error) {
+                reportSyncError('save', colName, res.error);
+              } else {
+                clearPendingWrite(listenerKey, docId);
+              }
+              return res;
+            }).catch(function(err) {
+              reportSyncError('save', colName, err);
             });
           },
           delete: function() {
-            return client.from(colName).delete().eq('id', docId).catch(function(err) {});
+            try { localStorage.removeItem(STORAGE_PREFIX + docPath); } catch(e) {}
+            markPendingDelete(listenerKey, docId);
+            notifyLocal(listenerKey);
+            return client.from(colName).delete().eq('id', docId).catch(function(err) {
+              reportSyncError('delete', colName, err);
+            });
           },
           onSnapshot: function(onNext, onError) {
+            if (!listeners[listenerKey]) listeners[listenerKey] = [];
+            listeners[listenerKey].push(onNext);
+
+            var cachedRaw = null;
+            try { cachedRaw = JSON.parse(localStorage.getItem(STORAGE_PREFIX + docPath) || 'null'); } catch(e) {}
+            if (cachedRaw) {
+              try { onNext({ exists: true, id: docId, data: function() { return cachedRaw; } }); } catch(e) {}
+            }
+
             function fetchDoc() {
               client.from(colName).select('*').eq('id', docId).maybeSingle().then(function(res) {
                 if (res.data) {
                   var row = res.data;
                   var raw = (row.data && typeof row.data === 'object') ? row.data : row;
+                  var pw = getPending('write', listenerKey);
+                  var pd = getPending('delete', listenerKey);
+                  if (pd[docId]) return;
+                  var finalData = pw[docId] ? pw[docId] : raw;
+                  try { localStorage.setItem(STORAGE_PREFIX + docPath, JSON.stringify(Object.assign({}, finalData, { id: docId }))); } catch(e) {}
                   onNext({
                     exists: true,
                     id: docId,
-                    data: function() { return raw; }
+                    data: function() { return finalData; }
                   });
                 }
               }).catch(function(err) { if (onError) onError(err); });
@@ -305,6 +447,7 @@
               if (channel) {
                 try { client.removeChannel(channel); } catch(e) {}
               }
+              listeners[listenerKey] = (listeners[listenerKey]||[]).filter(function(cb) { return cb !== onNext; });
             };
           }
         };
