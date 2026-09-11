@@ -1,5 +1,15 @@
 # Build Log
 
+## 2026-09-11 — Bill/Cash choice popup on "+ New invoice"
+
+Clicking "+ New invoice" (Dashboard or the Invoices tab) now first shows a small
+popup asking "GST / Bill Invoice" or "Cash Entry", instead of going straight to the
+GST invoice form. Picking either opens the right form; Cancel or Escape dismisses it,
+backdrop click does not (consistent with the other forms). The mobile FAB menu was
+left as-is since it already separates "New invoice" and "New cash entry" as distinct
+options. Verified with Playwright (popup shows on both buttons, each choice opens the
+correct form, cancel/backdrop behavior correct).
+
 ## 2026-09-09 — Cash invoice total label + auto-preview on save
 
 - Cash Invoice's grand total was mislabeled "Amount Received" (a payment-tracking term

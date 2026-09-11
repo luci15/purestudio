@@ -162,6 +162,14 @@ td.num, th.num{text-align:right;}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .field-row.three{grid-template-columns:1fr 1fr 1fr;}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;}
+.choice-list{display:flex;flex-direction:column;gap:10px;}
+.choice-btn{display:flex;align-items:center;gap:14px;text-align:left;padding:14px 16px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--ink);cursor:pointer;min-height:56px;}
+.choice-btn svg{flex:none;color:var(--accent-strong);}
+.choice-btn span{display:flex;flex-direction:column;gap:2px;}
+.choice-btn strong{font-size:14px;}
+.choice-btn small{font-size:12px;color:var(--ink-muted);font-weight:500;}
+.choice-btn:hover{border-color:var(--accent);background:var(--accent-tint);}
+.choice-btn:active{background:var(--accent-tint);}
 .section-label{font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-faint);font-weight:700;margin:18px 0 10px;}
 .section-label:first-child{margin-top:0;}
 .hint-line{font-size:12px;color:var(--ink-faint);margin:-8px 0 14px;}
@@ -1067,6 +1075,26 @@ td.num, th.num{text-align:right;}
 
 <div class="overlay drawer-overlay" id="clientDrawer" hidden>
   <div class="drawer" id="drawerPanel"></div>
+</div>
+
+<div class="overlay" id="typeChoiceOverlay" hidden>
+  <div class="modal" style="max-width:380px;">
+    <h2>New entry</h2>
+    <div class="modal-sub">Is this a GST bill or a cash entry?</div>
+    <div class="choice-list">
+      <button type="button" class="choice-btn" id="choiceBill">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h10a1 1 0 0 1 1 1v16l-2.5-1.5L13 20l-2.5-1.5L8 20l-2.5-1.5L3 20V6a1 1 0 0 1 1-1h1"/><path d="M8 8h6M8 12h6M8 16h4"/></svg>
+        <span><strong>GST / Bill Invoice</strong><small>Tax invoice with CGST/SGST or IGST</small></span>
+      </button>
+      <button type="button" class="choice-btn" id="choiceCash">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+        <span><strong>Cash Entry</strong><small>No GST — just name, phone, and amount</small></span>
+      </button>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="choiceCancel">Cancel</button>
+    </div>
+  </div>
 </div>
 
 <div class="overlay" id="clientOverlay" hidden>
@@ -2213,8 +2241,13 @@ td.num, th.num{text-align:right;}
   }
   function closeInvoiceModal(){ $('invoiceOverlay').hidden = true; editingInvoiceId = null; $('iClientList').hidden = true; }
   $('btnEditNumber').addEventListener('click', function(){ $('iNumber').readOnly = false; $('iNumber').focus(); });
-  $('btnNewInvoice').addEventListener('click', function(){ openInvoiceModal(null); });
-  $('btnNewInvoiceTop').addEventListener('click', function(){ openInvoiceModal(null); });
+  function openTypeChoice(){ $('typeChoiceOverlay').hidden = false; }
+  function closeTypeChoice(){ $('typeChoiceOverlay').hidden = true; }
+  $('choiceBill').addEventListener('click', function(){ closeTypeChoice(); openInvoiceModal(null); });
+  $('choiceCash').addEventListener('click', function(){ closeTypeChoice(); openCashModal(null); });
+  $('choiceCancel').addEventListener('click', closeTypeChoice);
+  $('btnNewInvoice').addEventListener('click', openTypeChoice);
+  $('btnNewInvoiceTop').addEventListener('click', openTypeChoice);
   $('invoiceCancel').addEventListener('click', closeInvoiceModal);
   // Intentionally no backdrop-click-to-close: only Cancel should dismiss the invoice form.
 
@@ -2801,7 +2834,7 @@ td.num, th.num{text-align:right;}
 
   document.addEventListener('keydown', function(e){
     if(e.key === 'Escape'){
-      closeClientModal(); closeInvoiceModal(); closeDrawer();
+      closeClientModal(); closeInvoiceModal(); closeDrawer(); closeTypeChoice();
       $('actionSheet').hidden = true; $('previewOverlay').hidden = true; closeSettingsModal();
     }
   });
