@@ -1693,6 +1693,18 @@ td.num, th.num{text-align:right;}
     return map;
   }
 
+  function cashSalesByClient(){
+    var map = {};
+    cashEntries.forEach(function(k){
+      if(!k.clientId) return;
+      if(!map[k.clientId]) map[k.clientId] = {total:0, count:0, last:null};
+      map[k.clientId].total += Number(k.amount)||0;
+      map[k.clientId].count += 1;
+      if(!map[k.clientId].last || k.date > map[k.clientId].last) map[k.clientId].last = k.date;
+    });
+    return map;
+  }
+
   function renderKPIs(){
     var monthInvoices = invoices.filter(function(i){ return (i.date||'').slice(0,7) === selectedMonth; });
     var byClient = {};
@@ -1856,8 +1868,12 @@ td.num, th.num{text-align:right;}
     if(!c){ closeDrawer(); return; }
     var map = salesByClient();
     var s = map[c.id] || {total:0, count:0};
-    var avg = s.count ? s.total / s.count : 0;
+    var cashMap = cashSalesByClient();
+    var cs = cashMap[c.id] || {total:0, count:0};
+    var combined = s.total + cs.total;
     var history = invoices.filter(function(i){ return i.clientId === c.id; })
+      .sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+    var cashHistory = cashEntries.filter(function(k){ return k.clientId === c.id; })
       .sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
 
     var contactHtml = '<div class="contact-list">' +
@@ -1878,6 +1894,13 @@ td.num, th.num{text-align:right;}
       '</div>';
     }).join('') : '<div class="client-sub" style="padding:6px 0;">No invoices yet for this client.</div>';
 
+    var cashHistoryHtml = cashHistory.length ? cashHistory.map(function(k){
+      return '<div class="history-row" data-preview-cash="'+k.id+'">'+
+        '<div><div class="hnum mono">'+esc(k.number||'—')+'</div><div class="hdate">'+fmtDate(k.date)+'</div></div>'+
+        '<div style="text-align:right;"><div class="mono" style="font-weight:600;">'+money(Number(k.amount)||0)+'</div></div>'+
+      '</div>';
+    }).join('') : '<div class="client-sub" style="padding:6px 0;">No cash entries yet for this client.</div>';
+
     $('drawerPanel').innerHTML =
       '<div class="drawer-head">'+
         '<div class="drawer-id"><span class="avatar lg">'+esc(initials(c.name))+'</span>'+
@@ -1886,18 +1909,23 @@ td.num, th.num{text-align:right;}
         '<button class="icon-btn" id="drawerClose" aria-label="Close"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>'+
       '</div>'+
       '<div class="drawer-body">'+
-        '<div class="drawer-stats">'+
-          '<div class="kpi"><div class="label">Total sales</div><div class="value mono">'+money(s.total)+'</div></div>'+
-          '<div class="kpi"><div class="label">Invoices</div><div class="value mono">'+s.count+'</div></div>'+
-          '<div class="kpi"><div class="label">Avg. invoice</div><div class="value mono">'+money(avg)+'</div></div>'+
+        '<div class="drawer-section">'+
+          '<h3>Revenue summary</h3>'+
+          '<div class="drawer-stats">'+
+            '<div class="kpi"><div class="label">GST sales</div><div class="value mono">'+money(s.total)+'</div><div class="hint">'+s.count+' invoice'+(s.count===1?'':'s')+'</div></div>'+
+            '<div class="kpi"><div class="label">Cash sales</div><div class="value mono">'+money(cs.total)+'</div><div class="hint">'+cs.count+' entr'+(cs.count===1?'y':'ies')+'</div></div>'+
+            '<div class="kpi"><div class="label">Combined total</div><div class="value mono">'+money(combined)+'</div><div class="hint">GST + Cash</div></div>'+
+          '</div>'+
         '</div>'+
         '<div class="drawer-section"><h3>Contact</h3>'+contactHtml+'</div>'+
         '<div class="actions">'+
           '<button class="btn primary small" id="drawerNewInvoice">+ New invoice</button>'+
+          '<button class="btn ghost small" id="drawerNewCash">+ New cash entry</button>'+
           '<button class="btn ghost small" id="drawerEdit">Edit details</button>'+
           '<button class="btn ghost small danger" id="drawerDelete">Delete client</button>'+
         '</div>'+
         '<div class="drawer-section"><h3>Invoice history</h3>'+historyHtml+'</div>'+
+        '<div class="drawer-section"><h3>Cash history</h3>'+cashHistoryHtml+'</div>'+
       '</div>';
 
     $('drawerClose').addEventListener('click', closeDrawer);
@@ -1908,10 +1936,20 @@ td.num, th.num{text-align:right;}
       comboSelectedId = c.id;
       updateClientHint();
     });
+    $('drawerNewCash').addEventListener('click', function(){
+      openCashModal(null);
+      $('kClientName').value = c.name;
+      $('kClientId').value = c.id;
+      cashComboSelectedId = c.id;
+      if(c.phone) $('kClientPhone').value = c.phone;
+    });
     $('drawerEdit').addEventListener('click', function(){ openClientModal(c.id); });
     $('drawerDelete').addEventListener('click', function(){ deleteClient(c.id); closeDrawer(); });
     document.querySelectorAll('[data-preview-invoice]').forEach(function(el){
       el.addEventListener('click', function(){ openPreview(el.getAttribute('data-preview-invoice')); });
+    });
+    document.querySelectorAll('[data-preview-cash]').forEach(function(el){
+      el.addEventListener('click', function(){ openCashPreview(el.getAttribute('data-preview-cash')); });
     });
   }
 

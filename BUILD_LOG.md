@@ -1,5 +1,17 @@
 # Build Log
 
+## 2026-09-11 — Revenue summary in the client card
+
+The client drawer (opened by tapping a client) now has a "Revenue summary" section
+with three figures side by side — GST sales, Cash sales, and Combined total — plus a
+new "Cash history" list beneath the existing "Invoice history" (both clickable to
+open that document's preview), and a "+ New cash entry" quick-action button next to
+"+ New invoice". The main Clients table's "Total sales" column is unchanged
+(GST-only), matching the dashboard's existing convention of never silently merging
+GST and cash figures. Verified with Playwright: a client with one ₹1,180 GST invoice
+and one ₹500 cash entry shows GST ₹1,180.00 / Cash ₹500.00 / Combined ₹1,680.00, with
+both history lists present.
+
 ## 2026-09-11 — Link Cash Dealings to the shared client list
 
 Cash entry's "Client name" is now a search/select combobox, same as the GST invoice
