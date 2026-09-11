@@ -887,7 +887,7 @@ td.num, th.num{text-align:right;}
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Client</th><th class="num">Invoices</th><th class="num">Total sales</th><th>Last invoice</th></tr></thead>
+            <thead><tr><th>Client</th><th class="num">GST invoices</th><th class="num">Total sales</th><th>Last activity</th></tr></thead>
             <tbody id="salesTableBody"></tbody>
           </table>
         </div>
@@ -922,7 +922,7 @@ td.num, th.num{text-align:right;}
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Company</th><th>Contact</th><th class="num">Total sales</th><th class="num">Invoices</th><th></th></tr></thead>
+            <thead><tr><th>Company</th><th>Contact</th><th class="num">Total sales</th><th class="num">GST invoices</th><th></th></tr></thead>
             <tbody id="clientsTableBody"></tbody>
           </table>
         </div>
@@ -1764,10 +1764,13 @@ td.num, th.num{text-align:right;}
 
   function renderSalesTable(){
     var map = salesByClient();
+    var cashMap = cashSalesByClient();
     var q = ($('salesSearch').value || '').toLowerCase();
     var rows = clients.map(function(c){
       var s = map[c.id] || {total:0, count:0, last:null};
-      return {client:c, total:s.total, count:s.count, last:s.last};
+      var cs = cashMap[c.id] || {total:0, count:0, last:null};
+      var last = (s.last && cs.last) ? (s.last > cs.last ? s.last : cs.last) : (s.last || cs.last);
+      return {client:c, gstTotal:s.total, cashTotal:cs.total, total:s.total + cs.total, count:s.count, last:last};
     }).filter(function(r){ return r.client.name.toLowerCase().indexOf(q) !== -1; })
       .sort(function(a,b){ return b.total - a.total; });
 
@@ -1777,9 +1780,9 @@ td.num, th.num{text-align:right;}
         '<td class="client-name card-title" data-label="Client">'+
           '<div class="name-cell"><span class="avatar">'+esc(initials(r.client.name))+'</span>'+esc(r.client.name)+'</div>'+
         '</td>'+
-        '<td class="num mono" data-label="Invoices">'+r.count+'</td>'+
-        '<td class="num mono" data-label="Total sales">'+money(r.total)+'</td>'+
-        '<td data-label="Last invoice">'+fmtDate(r.last)+'</td></tr>';
+        '<td class="num mono" data-label="GST invoices">'+r.count+'</td>'+
+        '<td class="num mono" data-label="Total sales"><div>'+money(r.total)+'</div>'+(r.cashTotal>0 ? '<div class="client-sub">GST '+money(r.gstTotal)+' &middot; Cash '+money(r.cashTotal)+'</div>' : '')+'</td>'+
+        '<td data-label="Last activity">'+fmtDate(r.last)+'</td></tr>';
     }).join('') || (clients.length ? '<tr><td colspan="4" style="color:var(--ink-faint);padding:20px 12px;">No matches.</td></tr>' : '');
   }
 
@@ -1787,7 +1790,12 @@ td.num, th.num{text-align:right;}
     var q = ($('clientSearch').value || '').toLowerCase();
     var sortBy = $('clientSort').value;
     var map = salesByClient();
-    var totalOf = function(c){ return (map[c.id] || {total:0}).total; };
+    var cashMap = cashSalesByClient();
+    var totalOf = function(c){
+      var s = map[c.id] || {total:0};
+      var cs = cashMap[c.id] || {total:0};
+      return s.total + cs.total;
+    };
     var filtered = clients.filter(function(c){ return c.name.toLowerCase().indexOf(q) !== -1; })
       .sort(function(a,b){
         if(sortBy === 'sales-desc') return totalOf(b) - totalOf(a);
@@ -1798,13 +1806,15 @@ td.num, th.num{text-align:right;}
     $('clientsEmpty').style.display = clients.length ? 'none' : 'flex';
     $('clientsTableBody').innerHTML = filtered.map(function(c){
       var s = map[c.id] || {total:0, count:0};
+      var cs = cashMap[c.id] || {total:0, count:0};
+      var combinedTotal = s.total + cs.total;
       return '<tr class="row-click" data-client-id="'+c.id+'">'+
         '<td class="card-title" data-label="Company">'+
           '<div class="name-cell"><span class="avatar">'+esc(initials(c.name))+'</span><span class="client-name">'+esc(c.name)+'</span></div>'+
         '</td>'+
         '<td data-label="Contact"><div>'+esc(c.contact||'—')+'</div><div class="client-sub">'+esc(c.email||'')+(c.phone?(' · '+esc(c.phone)):'')+'</div></td>'+
-        '<td class="num mono" data-label="Total sales">'+money(s.total)+'</td>'+
-        '<td class="num mono" data-label="Invoices">'+s.count+'</td>'+
+        '<td class="num mono" data-label="Total sales"><div>'+money(combinedTotal)+'</div>'+(cs.total>0 ? '<div class="client-sub">GST '+money(s.total)+' &middot; Cash '+money(cs.total)+'</div>' : '')+'</td>'+
+        '<td class="num mono" data-label="GST invoices">'+s.count+'</td>'+
         '<td class="card-actions"><div class="row-actions">'+
           '<button class="icon-btn" data-edit-client="'+c.id+'" title="Edit" aria-label="Edit '+esc(c.name)+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>'+
           '<button class="icon-btn" data-del-client="'+c.id+'" title="Delete" aria-label="Delete '+esc(c.name)+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>'+

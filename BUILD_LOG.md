@@ -1,5 +1,19 @@
 # Build Log
 
+## 2026-09-11 — "Total sales" on Clients now includes cash
+
+The Clients tab table and the Dashboard's "All-time sales by client" table were
+both still GST-invoice-only for their "Total sales" figure, so a client with only
+a cash entry (no GST invoice) showed ₹0.00 there even though the client drawer
+already showed the cash amount correctly. Both tables now show the combined
+GST+Cash total as the headline figure, with a small "GST ₹X · Cash ₹Y" breakdown
+line underneath whenever a client has any cash sales (so nothing is silently
+merged — the split is always visible). The invoice-count column is relabeled
+"GST invoices" for clarity since it doesn't include cash entries. The sort filter
+now sorts by this same combined total. Verified: a client with only a ₹650 cash
+entry now shows "₹650.00 / GST ₹0.00 · Cash ₹650.00" instead of ₹0.00, on both
+tables.
+
 ## 2026-09-11 — Revenue summary in the client card
 
 The client drawer (opened by tapping a client) now has a "Revenue summary" section
