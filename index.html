@@ -232,16 +232,6 @@ td.num, th.num{text-align:right;}
 .history-row .hdate{font-size:12px;color:var(--ink-faint);}
 
 .bottom-nav{display:none;}
-.fab{display:none;}
-.sheet-overlay{align-items:flex-end;padding:0;}
-.sheet{
-  background:var(--surface);width:100%;border-radius:20px 20px 0 0;padding:10px 12px calc(14px + env(safe-area-inset-bottom));
-  display:flex;flex-direction:column;gap:2px;animation:sheet-up 0.18s ease-out;
-}
-@keyframes sheet-up{from{transform:translateY(100%);}to{transform:translateY(0);}}
-.sheet-item{display:flex;align-items:center;gap:14px;padding:15px 14px;border:none;background:none;font-size:15px;font-weight:600;color:var(--ink);border-radius:12px;text-align:left;min-height:48px;}
-.sheet-item:hover, .sheet-item:active{background:var(--surface-2);}
-.sheet-item.cancel{color:var(--ink-muted);margin-top:6px;border-top:1px solid var(--border);border-radius:0;padding-top:18px;}
 
 .preview-modal{max-width:780px;padding:22px;}
 .preview-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap;}
@@ -297,12 +287,6 @@ td.num, th.num{text-align:right;}
   .bn-btn[aria-current="page"]{color:var(--accent-strong);}
   .bn-btn svg{opacity:0.85;}
   .bn-btn[aria-current="page"] svg{opacity:1;}
-
-  .fab{
-    display:flex;position:fixed;right:18px;bottom:76px;width:54px;height:54px;border-radius:16px;background:var(--accent);color:#fff;
-    align-items:center;justify-content:center;border:none;box-shadow:0 10px 24px var(--shadow);z-index:41;
-  }
-  .fab:active{background:var(--accent-strong);}
 
   .table-wrap table, .table-wrap thead, .table-wrap tbody, .table-wrap th, .table-wrap tr{display:block;}
   .table-wrap thead{position:absolute;left:-9999px;top:-9999px;}
@@ -1018,7 +1002,12 @@ td.num, th.num{text-align:right;}
     <div class="modal-sub">A quick, GST-free record for an off-books cash sale.</div>
     <form id="cashForm">
       <div class="field"><label for="kNumber">Cash #</label><input type="text" id="kNumber" readonly></div>
-      <div class="field"><label for="kClientName">Client name *</label><input type="text" id="kClientName" required></div>
+      <div class="field combobox">
+        <label for="kClientName">Client name *</label>
+        <input type="text" id="kClientName" placeholder="Search or type a new client name" autocomplete="off" required>
+        <input type="hidden" id="kClientId">
+        <div class="combo-list" id="kClientList" hidden></div>
+      </div>
       <div class="field"><label for="kClientPhone">Client phone *</label><input type="tel" id="kClientPhone" required></div>
       <div class="field-row">
         <div class="field"><label for="kDate">Date *</label><input type="date" id="kDate" required></div>
@@ -1051,27 +1040,6 @@ td.num, th.num{text-align:right;}
     <span>Cash</span>
   </button>
 </nav>
-<button class="fab" id="fabAdd" aria-label="Quick add">
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
-</button>
-
-<div class="overlay sheet-overlay" id="actionSheet" hidden>
-  <div class="sheet">
-    <button class="sheet-item" id="sheetNewInvoice">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h10a1 1 0 0 1 1 1v16l-2.5-1.5L13 20l-2.5-1.5L8 20l-2.5-1.5L3 20V6a1 1 0 0 1 1-1h1"/><path d="M8 8h6M8 12h6M8 16h4"/></svg>
-      New invoice
-    </button>
-    <button class="sheet-item" id="sheetNewClient">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V6a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v15"/><path d="M14 10h5a1 1 0 0 1 1 1v10"/><path d="M8 8h.01M8 12h.01M8 16h.01"/></svg>
-      Add client
-    </button>
-    <button class="sheet-item" id="sheetNewCash">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
-      New cash entry
-    </button>
-    <button class="sheet-item cancel" id="sheetCancel">Cancel</button>
-  </div>
-</div>
 
 <div class="overlay drawer-overlay" id="clientDrawer" hidden>
   <div class="drawer" id="drawerPanel"></div>
@@ -1532,6 +1500,7 @@ td.num, th.num{text-align:right;}
   var editingClientId = null;
   var editingInvoiceId = null;
   var comboSelectedId = null;
+  var cashComboSelectedId = null;
   var drawerClientId = null;
   var formItems = [];
   var formPayments = [];
@@ -2271,7 +2240,7 @@ td.num, th.num{text-align:right;}
   });
   comboInput.addEventListener('focus', function(){ if(comboList.innerHTML) comboList.hidden = false; });
   document.addEventListener('click', function(e){
-    if(!e.target.closest('.combobox')) comboList.hidden = true;
+    if(!e.target.closest('.combobox')){ comboList.hidden = true; if(typeof cashComboList !== 'undefined') cashComboList.hidden = true; }
   });
   comboList.addEventListener('click', function(e){
     var item = e.target.closest('.combo-item');
@@ -2366,8 +2335,15 @@ td.num, th.num{text-align:right;}
     editingCashId = id || null;
     var k = id ? cashEntries.filter(function(c){ return c.id === id; })[0] : null;
     $('cashModalTitle').textContent = k ? 'Edit cash entry' : 'New cash entry';
+    var kResolvedClientId = k ? (k.clientId || null) : null;
+    if(k && !kResolvedClientId && k.clientName){
+      var kMatch = clients.filter(function(c){ return c.name.toLowerCase() === k.clientName.toLowerCase(); })[0];
+      if(kMatch) kResolvedClientId = kMatch.id;
+    }
     $('kNumber').value = k ? (k.number||'') : nextCashNumber();
     $('kClientName').value = k ? (k.clientName||'') : '';
+    $('kClientId').value = kResolvedClientId || '';
+    cashComboSelectedId = kResolvedClientId;
     $('kClientPhone').value = k ? (k.clientPhone||'') : '';
     $('kDate').value = k ? (k.date||'') : new Date().toISOString().slice(0,10);
     $('kAmount').value = k ? (k.amount!=null?k.amount:'') : '';
@@ -2377,16 +2353,65 @@ td.num, th.num{text-align:right;}
   }
   function closeCashModal(){ $('cashOverlay').hidden = true; editingCashId = null; }
   $('btnNewCash').addEventListener('click', function(){ openCashModal(null); });
-  $('sheetNewCash').addEventListener('click', function(){ $('actionSheet').hidden = true; openCashModal(null); });
   $('cashCancel').addEventListener('click', closeCashModal);
   // Intentionally no backdrop-click-to-close: only Cancel should dismiss the cash entry form.
+
+  var cashComboInput = $('kClientName');
+  var cashComboList = $('kClientList');
+  cashComboInput.addEventListener('input', function(){
+    cashComboSelectedId = null;
+    $('kClientId').value = '';
+    var q = cashComboInput.value.trim().toLowerCase();
+    var matches = clients.filter(function(c){ return c.name.toLowerCase().indexOf(q) !== -1; }).slice(0, 8);
+    var html = matches.map(function(c){
+      return '<div class="combo-item" data-id="'+c.id+'">'+esc(c.name)+'</div>';
+    }).join('');
+    var exact = clients.some(function(c){ return c.name.toLowerCase() === q; });
+    if(q && !exact){
+      html += '<div class="combo-item create" data-create="1">+ Add "'+esc(cashComboInput.value.trim())+'" as a new client</div>';
+    }
+    cashComboList.innerHTML = html;
+    cashComboList.hidden = !html;
+  });
+  cashComboInput.addEventListener('focus', function(){ if(cashComboList.innerHTML) cashComboList.hidden = false; });
+  cashComboList.addEventListener('click', function(e){
+    var item = e.target.closest('.combo-item');
+    if(!item) return;
+    if(item.getAttribute('data-create')){
+      var name = cashComboInput.value.trim();
+      if(!db) db = createLocalDb();
+      if(!name) return;
+      db.collection('clients').add({name: name, contact:'', email:'', phone:'', address:'', gstin:'', notes:'', createdAt: new Date().toISOString()})
+        .then(function(ref){
+          cashComboSelectedId = ref.id;
+          $('kClientId').value = ref.id;
+          cashComboInput.value = name;
+          cashComboList.hidden = true;
+        });
+    } else {
+      var id = item.getAttribute('data-id');
+      var c = clientById(id);
+      cashComboSelectedId = id;
+      $('kClientId').value = id;
+      cashComboInput.value = c ? c.name : '';
+      if(c && c.phone && !$('kClientPhone').value.trim()) $('kClientPhone').value = c.phone;
+      cashComboList.hidden = true;
+    }
+  });
+
   $('cashForm').addEventListener('submit', function(e){
     e.preventDefault();
     if(!db) db = createLocalDb();
+    var cashClientId = $('kClientId').value || cashComboSelectedId;
+    if(!cashClientId){
+      cashComboInput.focus();
+      return;
+    }
     var data = {
-      number: $('kNumber').value.trim() || nextCashNumber(),
-      clientName: $('kClientName').value.trim(),
+      clientId: cashClientId,
+      clientName: cashComboInput.value.trim(),
       clientPhone: $('kClientPhone').value.trim(),
+      number: $('kNumber').value.trim() || nextCashNumber(),
       date: $('kDate').value,
       amount: parseFloat($('kAmount').value) || 0,
       description: $('kDesc').value.trim()
@@ -2825,17 +2850,12 @@ td.num, th.num{text-align:right;}
     db.collection('settings').doc('business').set(data).then(function(){ closeSettingsModal(); renderAll(); }).catch(function(err){ console.error(err); showBanner('Saved locally, but cloud sync failed: ' + (err && err.message ? err.message : 'network error')); });
   });
 
-  $('fabAdd').addEventListener('click', function(){ $('actionSheet').hidden = false; });
-  $('sheetCancel').addEventListener('click', function(){ $('actionSheet').hidden = true; });
-  $('sheetNewInvoice').addEventListener('click', function(){ $('actionSheet').hidden = true; openInvoiceModal(null); });
-  $('sheetNewClient').addEventListener('click', function(){ $('actionSheet').hidden = true; openClientModal(null); });
-  $('actionSheet').addEventListener('click', function(e){ if(e.target === $('actionSheet')) $('actionSheet').hidden = true; });
   $('clientDrawer').addEventListener('click', function(e){ if(e.target === $('clientDrawer')) closeDrawer(); });
 
   document.addEventListener('keydown', function(e){
     if(e.key === 'Escape'){
       closeClientModal(); closeInvoiceModal(); closeDrawer(); closeTypeChoice();
-      $('actionSheet').hidden = true; $('previewOverlay').hidden = true; closeSettingsModal();
+      $('previewOverlay').hidden = true; closeSettingsModal();
     }
   });
 

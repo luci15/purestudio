@@ -1,5 +1,29 @@
 # Build Log
 
+## 2026-09-11 — Link Cash Dealings to the shared client list
+
+Cash entry's "Client name" is now a search/select combobox, same as the GST invoice
+form: pick an existing client (their phone auto-fills if on file) or type a new name
+and use "+ Add ... as a new client" to create it on the spot — it then shows up in
+the Clients tab like any other client. Saving is blocked until a client is actually
+resolved (selected or created), matching the invoice form's behavior exactly. Cash
+entries now store `clientId` alongside the existing `clientName`/`clientPhone`;
+editing an older cash entry that predates this (no `clientId` on record) auto-matches
+it to an existing client by exact name if one exists. Cash amounts still do NOT
+count toward a client's GST "Total sales" figure — only the client identity is
+shared, not the revenue totals. Verified with Playwright: existing-client selection
+(no duplicate, phone autofill), new-client creation (added to Clients list), and the
+submit-blocked-until-resolved guard.
+
+## 2026-09-11 — Remove the floating "+" button on mobile
+
+Removed the mobile-only floating action button and its "New invoice / Add client /
+New cash entry" popup sheet entirely (not just hidden — the button, the sheet markup,
+and all its JS wiring). It was redundant: every tab already has its own "+" button
+(Clients, Invoices, Cash), and "+ New invoice" now offers the Bill/Cash choice itself.
+Verified the FAB and sheet are gone from the DOM and that the per-tab add buttons
+still work correctly on a mobile viewport.
+
 ## 2026-09-11 — Bill/Cash choice popup on "+ New invoice"
 
 Clicking "+ New invoice" (Dashboard or the Invoices tab) now first shows a small
