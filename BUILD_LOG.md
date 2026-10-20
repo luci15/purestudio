@@ -148,3 +148,14 @@ all flows confirmed working.
 ### Follow-ups for the business owner (not code changes)
 - If Supabase is already set up, re-run `schema.sql` — it now also creates the `cash_entries` table (needed for items 07–11).
 - The WhatsApp/Email buttons attach the real PDF automatically only on browsers/devices that support the Web Share API with files (most modern mobile browsers); elsewhere they download the PDF and open the compose window for a manual attach — that split is a browser security limit, not a bug.
+
+## 2026-10-20 — Expenses tab
+
+Request: an Expenses section where any kind of expense can be created, named, given a type, and shown as Paid or Unpaid in a column.
+
+- New **Expenses** tab (sidebar + mobile bottom bar). Fields: name, **type** (free text with suggestions: Rent, Salaries, Software, Travel, Utilities, Marketing, Equipment, Taxes, Other + every type already used), amount, date, **status Paid/Unpaid**, optional notes.
+- Table: Date · Expense · Type · Amount · **Status** · actions. The Status chip is a button — click to flip Paid ⇄ Unpaid. Edit and delete (with confirm) per row.
+- Top tiles: Total / Paid / Unpaid for the current filter. Filters: search (name, type, notes), status, type. A type typed in a different case reuses the existing spelling.
+- Storage: new `expenses` collection (`{id, data}`), same pattern as Cash Dealings. **Run the Expenses block at the bottom of `schema.sql` in the Supabase SQL editor** (creates the table, anon policy and realtime publication) — until then Expenses saves only in that browser.
+- Not wired into the Dashboard revenue tiles (not requested).
+- Verified in a simulated browser (add / edit / delete / toggle / filters / search / reload persistence) and in real Chrome (desktop + phone layout).

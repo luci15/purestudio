@@ -4,6 +4,7 @@ A fast, lightweight studio management and invoicing application with PDF generat
 
 ## 🚀 Features
 
+- **Expenses**: record any kind of cost (rent, software, travel, or a type you make up) with an amount, date and a **Paid / Unpaid** status in its own column. Click the status chip to flip it, filter by status or type, and see Total / Paid / Unpaid at the top.
 - **Invoicing & Ledger**: Create, manage, and track GST invoices, payments received, and client records — kept separate from a lightweight Cash Dealings ledger.
 - **GST done right**: CGST+SGST for in-state, IGST for out-of-state — never all three at once. Invoice numbers auto-increment (no manual entry); cash entries get their own independent sequence.
 - **Client-side PDF Generation**: Generates high-contrast, printable A4 GST invoices on-the-fly using `html2pdf.js`, with WhatsApp/Email sharing, at zero cloud storage cost.
@@ -15,7 +16,7 @@ A fast, lightweight studio management and invoicing application with PDF generat
 ## 🗄️ Setting Up Supabase (2 Minutes)
 
 1. Create a free project at [supabase.com](https://supabase.com).
-2. Go to **SQL Editor** in your Supabase dashboard and run the queries inside [`schema.sql`](./schema.sql) (includes the `cash_entries` table — re-run this if you set up Supabase before the Cash Dealings feature existed).
+2. Go to **SQL Editor** in your Supabase dashboard and run the queries inside [`schema.sql`](./schema.sql) (includes the `cash_entries` table; if you set up Supabase earlier, run just the **Expenses** block at the bottom of the file to add the `expenses` table).
 3. Copy your **Project URL** and **Anon Public Key** from **Project Settings > API**.
 4. Configure credentials in either of two ways:
    - **Local / static hosting**: Open [`config.js`](./config.js) and paste your credentials:

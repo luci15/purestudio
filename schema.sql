@@ -48,3 +48,21 @@ alter publication supabase_realtime add table public.clients;
 alter publication supabase_realtime add table public.invoices;
 alter publication supabase_realtime add table public.settings;
 alter publication supabase_realtime add table public.cash_entries;
+
+-- =========================================================
+-- 6. Expenses (added later). Already ran this file before?
+--    Run ONLY this block in the Supabase SQL Editor — it is safe to re-run.
+-- =========================================================
+create table if not exists public.expenses (
+  id text primary key,
+  data jsonb not null default '{}'::jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+alter table public.expenses enable row level security;
+drop policy if exists "Allow all operations for anon on expenses" on public.expenses;
+create policy "Allow all operations for anon on expenses" on public.expenses for all using (true) with check (true);
+do $$
+begin
+  alter publication supabase_realtime add table public.expenses;
+exception when duplicate_object then null;
+end $$;
