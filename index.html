@@ -948,6 +948,7 @@ button.chip:hover{filter:brightness(0.95);}
           <button class="btn primary" id="btnNewInvoice">+ New invoice</button>
         </div>
       </div>
+      <div class="kpis" id="invoiceMonthKpi" style="margin-bottom:18px;"></div>
       <div class="card">
         <div class="toolbar" style="margin-bottom:16px;">
           <div class="search">
@@ -984,6 +985,7 @@ button.chip:hover{filter:brightness(0.95);}
           <button class="btn primary" id="btnNewCash">+ New cash entry</button>
         </div>
       </div>
+      <div class="kpis" id="cashMonthKpi" style="margin-bottom:18px;"></div>
       <div class="card">
         <div class="toolbar" style="margin-bottom:16px;">
           <div class="search">
@@ -1019,7 +1021,7 @@ button.chip:hover{filter:brightness(0.95);}
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
             <input type="text" id="expenseSearch" placeholder="Search name, type or notes">
           </div>
-          <div class="filters">
+          <div class="filters" style="margin-left:auto;">
             <select class="select" id="expenseStatusFilter">
               <option value="">All statuses</option>
               <option value="unpaid">Unpaid</option>
@@ -1776,6 +1778,36 @@ button.chip:hover{filter:brightness(0.95);}
     return map;
   }
 
+  // Running-month opening totals: for this month the GST billing and cash totals START at these amounts, and
+  // invoices / cash entries dated in the month that were added in the app from `since` onwards add on top.
+  // Entries saved before `since` are already inside the opening figure, so they are not added again.
+  var MONTH_OPENING = { month: '2026-10', since: '2026-10-21T09:41:25.828Z', billing: 190791, cash: 25000 };
+  function monthTotals(ym){
+    var open = ym === MONTH_OPENING.month;
+    function counted(rec){ return (rec.date||'').slice(0,7) === ym && (!open || (rec.createdAt||'') >= MONTH_OPENING.since); }
+    var inv = invoices.filter(counted), csh = cashEntries.filter(counted);
+    var billAdded = inv.reduce(function(sum,i){ return sum + invoiceTotal(i); }, 0);
+    var cashAdded = csh.reduce(function(sum,k){ return sum + (Number(k.amount)||0); }, 0);
+    var ob = open ? MONTH_OPENING.billing : 0, oc = open ? MONTH_OPENING.cash : 0;
+    return {
+      billing: {opening: ob, added: billAdded, count: inv.length, total: ob + billAdded},
+      cash: {opening: oc, added: cashAdded, count: csh.length, total: oc + cashAdded}
+    };
+  }
+  function monthHint(b, one, many){
+    var n = b.count + ' ' + (b.count === 1 ? one : many);
+    return b.opening ? (money(b.opening) + ' opening + ' + money(b.added) + ' added (' + n + ')') : n;
+  }
+  function renderMonthStrips(){
+    var ym = new Date().toISOString().slice(0,7);
+    var mt = monthTotals(ym);
+    function tile(label, b, one, many){
+      return '<div class="kpi"><div class="label">' + esc(label + ' — ' + fmtMonth(ym)) + '</div><div class="value mono">' + money(b.total) + '</div><div class="hint">' + esc(monthHint(b, one, many)) + '</div></div>';
+    }
+    $('invoiceMonthKpi').innerHTML = tile('Invoiced this month', mt.billing, 'invoice', 'invoices');
+    $('cashMonthKpi').innerHTML = tile('Cash this month', mt.cash, 'entry', 'entries');
+  }
+
   function renderKPIs(){
     var monthInvoices = invoices.filter(function(i){ return (i.date||'').slice(0,7) === selectedMonth; });
     var byClient = {};
@@ -1790,11 +1822,21 @@ button.chip:hover{filter:brightness(0.95);}
     var monthCash = cashEntries.filter(function(k){ return (k.date||'').slice(0,7) === selectedMonth; });
     var cashRevenue = monthCash.reduce(function(s,k){ return s + (Number(k.amount)||0); }, 0);
     var combined = billingRevenue + cashRevenue;
+    var mt = monthTotals(selectedMonth);
+    billingRevenue = mt.billing.total; cashRevenue = mt.cash.total; combined = billingRevenue + cashRevenue;
+    var monthExp = expenses.filter(function(x){ return (x.date||'').slice(0,7) === selectedMonth; });
+    var expTotal = 0, expPaid = 0, expUnpaid = 0;
+    monthExp.forEach(function(x){
+      var amt = Number(x.amount) || 0;
+      expTotal += amt;
+      if(x.status === 'paid') expPaid += amt; else expUnpaid += amt;
+    });
 
     var kpis = [
-      {label:'GST Billing — ' + fmtMonth(selectedMonth), value: money(billingRevenue), mono:true, hint: monthInvoices.length + ' invoice' + (monthInvoices.length===1?'':'s')},
-      {label:'Cash Dealings — ' + fmtMonth(selectedMonth), value: money(cashRevenue), mono:true, hint: monthCash.length + ' entr' + (monthCash.length===1?'y':'ies')},
+      {label:'GST Billing — ' + fmtMonth(selectedMonth), value: money(billingRevenue), mono:true, hint: monthHint(mt.billing, 'invoice', 'invoices')},
+      {label:'Cash Dealings — ' + fmtMonth(selectedMonth), value: money(cashRevenue), mono:true, hint: monthHint(mt.cash, 'entry', 'entries')},
       {label:'Combined Total — ' + fmtMonth(selectedMonth), value: money(combined), mono:true, hint: 'Billing + Cash'},
+      {label:'Expenses — ' + fmtMonth(selectedMonth), value: money(expTotal), mono:true, hint: monthExp.length ? (money(expPaid) + ' paid · ' + money(expUnpaid) + ' unpaid') : 'No expenses this month'},
       {label:'Top client this month', value: topClient ? topClient.name : '—', hint: topClient ? money(topAmt) + ' in sales' : 'No invoices yet'},
       {label:'Total clients', value: String(clients.length)}
     ];
@@ -2043,6 +2085,7 @@ button.chip:hover{filter:brightness(0.95);}
 
   function renderAll(){
     renderKPIs();
+    renderMonthStrips();
     renderChart();
     renderSalesTable();
     renderClients();

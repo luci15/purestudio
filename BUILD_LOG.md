@@ -159,3 +159,11 @@ Request: an Expenses section where any kind of expense can be created, named, gi
 - Storage: new `expenses` collection (`{id, data}`), same pattern as Cash Dealings. **Run the Expenses block at the bottom of `schema.sql` in the Supabase SQL editor** (creates the table, anon policy and realtime publication) — until then Expenses saves only in that browser.
 - Not wired into the Dashboard revenue tiles (not requested).
 - Verified in a simulated browser (add / edit / delete / toggle / filters / search / reload persistence) and in real Chrome (desktop + phone layout).
+
+## 2026-10-21 — October opening totals; dashboard Expenses tile; Expenses filters
+
+- **October 2026 opening amounts:** GST billing starts at ₹1,90,791 and cash at ₹25,000. Invoices / cash entries dated in October that are added in the app from the cut-off (2026-10-21 09:41 UTC) onward are added on top. Entries saved before the cut-off are treated as already inside the opening figure and are NOT added again. Other months are plain sums of their entries; from 1 November the opening no longer applies. Constant: `MONTH_OPENING` in `index.html` (month, since, billing, cash).
+- Shown on the Dashboard (GST Billing, Cash Dealings and Combined Total tiles, each with "₹opening + ₹added (n)" under it) and as a new "this month" summary above the Invoices and Cash Dealings tables.
+- **Dashboard Expenses tile:** "Expenses — <month>" after Combined Total, with a paid / unpaid split; follows the month picker. Expenses are not subtracted from revenue.
+- Expenses page: status / type filter boxes moved to the right, next to the count.
+- Tests (simulated browser, against these exact files): opening totals 22/22, Expenses 31/31, dashboard Expenses tile 14/14; layout checked in real Chrome.
