@@ -251,3 +251,10 @@ Request: an Expenses section where any kind of expense can be created, named, gi
 - Not wired into the Dashboard revenue tiles or any profit figure (not requested).
 - Tests: `expenses_test.js` 36/36 (local mode, reload persistence, signed-in save + second-device view); API 150/150 and UI suite re-run clean. Pixel layout checked in real Chrome (screenshots).
 - Local run: `python -m http.server 8080 --directory public` → http://127.0.0.1:8080 (no login in local mode; data lives in that browser's localStorage).
+
+## 2026-10-21 — Dashboard: monthly Expenses tile; Expenses filters moved right
+
+- Dashboard (main page) has a new **Expenses — <month>** tile right after Combined Total: total of that month's expenses, with a "₹x paid · ₹y unpaid" split (or "No expenses this month"). It follows the Month picker and updates when expenses are added, edited, toggled Paid/Unpaid or deleted.
+- Revenue tiles are untouched; expenses are *not* subtracted from Combined Total (no profit figure was requested).
+- Expenses page: the status/type filter boxes now sit on the right next to the "n expenses" count.
+- Tests: dashboard_expenses 14/14 (month isolation, picker, toggle/edit/delete sync, reload); layout checked in real Chrome. Local only — not pushed (live `main` has neither change yet).
