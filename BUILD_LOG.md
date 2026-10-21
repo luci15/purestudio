@@ -167,3 +167,7 @@ Request: an Expenses section where any kind of expense can be created, named, gi
 - **Dashboard Expenses tile:** "Expenses — <month>" after Combined Total, with a paid / unpaid split; follows the month picker. Expenses are not subtracted from revenue.
 - Expenses page: status / type filter boxes moved to the right, next to the count.
 - Tests (simulated browser, against these exact files): opening totals 22/22, Expenses 31/31, dashboard Expenses tile 14/14; layout checked in real Chrome.
+
+### Correction (same day) — existing October entries now count
+
+The first version skipped invoices / cash entries that were already saved before the cut-off. Corrected: for October 2026 the totals are **opening amount + every invoice / cash entry dated in October** (already saved or added later). GST billing opening ₹1,90,791, cash opening ₹25,000. The `since` cut-off was removed from `MONTH_OPENING`. Tests updated and re-run: opening totals 22/22, dashboard Expenses tile 14/14, Expenses 31/31.

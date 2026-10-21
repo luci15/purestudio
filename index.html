@@ -1779,12 +1779,12 @@ button.chip:hover{filter:brightness(0.95);}
   }
 
   // Running-month opening totals: for this month the GST billing and cash totals START at these amounts, and
-  // invoices / cash entries dated in the month that were added in the app from `since` onwards add on top.
-  // Entries saved before `since` are already inside the opening figure, so they are not added again.
-  var MONTH_OPENING = { month: '2026-10', since: '2026-10-21T09:41:25.828Z', billing: 190791, cash: 25000 };
+  // every invoice / cash entry dated in the month (already saved or added later) is added on top.
+  // Other months are plain sums. Remove or change this line when the month rolls over.
+  var MONTH_OPENING = { month: '2026-10', billing: 190791, cash: 25000 };
   function monthTotals(ym){
     var open = ym === MONTH_OPENING.month;
-    function counted(rec){ return (rec.date||'').slice(0,7) === ym && (!open || (rec.createdAt||'') >= MONTH_OPENING.since); }
+    function counted(rec){ return (rec.date||'').slice(0,7) === ym; }
     var inv = invoices.filter(counted), csh = cashEntries.filter(counted);
     var billAdded = inv.reduce(function(sum,i){ return sum + invoiceTotal(i); }, 0);
     var cashAdded = csh.reduce(function(sum,k){ return sum + (Number(k.amount)||0); }, 0);
