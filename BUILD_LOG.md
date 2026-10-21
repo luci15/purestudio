@@ -258,3 +258,7 @@ Request: an Expenses section where any kind of expense can be created, named, gi
 - Revenue tiles are untouched; expenses are *not* subtracted from Combined Total (no profit figure was requested).
 - Expenses page: the status/type filter boxes now sit on the right next to the "n expenses" count.
 - Tests: dashboard_expenses 14/14 (month isolation, picker, toggle/edit/delete sync, reload); layout checked in real Chrome. Local only — not pushed (live `main` has neither change yet).
+
+### Correction (same day) - existing October entries now count
+Opening amount + every invoice/cash entry dated in October (already saved or added later); the creation-time cut-off was removed. Pushed to main as 717f5f4.
+
