@@ -171,3 +171,12 @@ Request: an Expenses section where any kind of expense can be created, named, gi
 ### Correction (same day) — existing October entries now count
 
 The first version skipped invoices / cash entries that were already saved before the cut-off. Corrected: for October 2026 the totals are **opening amount + every invoice / cash entry dated in October** (already saved or added later). GST billing opening ₹1,90,791, cash opening ₹25,000. The `since` cut-off was removed from `MONTH_OPENING`. Tests updated and re-run: opening totals 22/22, dashboard Expenses tile 14/14, Expenses 31/31.
+
+## 2026-10-28 — Removed the October opening balance
+
+Request: remove the opening balance (GST ₹1,90,791 / cash ₹25,000) that was added for October 2026.
+
+- Removed `MONTH_OPENING` and its helpers; the Dashboard GST Billing, Cash Dealings and Combined Total tiles are plain sums again (billing + cash for the selected month, with "n invoices" / "n entries" hints).
+- The "this month" boxes above the Invoices and Cash Dealings tables went with it — they existed only to show the opening-based totals. Say if you want plain monthly totals back there.
+- Kept: the dashboard "Expenses — <month>" tile (paid / unpaid split) and the Expenses page filter position.
+- Verified: the page differs from the pre-opening version (88f714b) only by those two kept changes. Tests against the live files: no-opening 11/11, dashboard Expenses tile 14/14, Expenses page 31/31.
