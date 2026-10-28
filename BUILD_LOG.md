@@ -262,3 +262,6 @@ Request: an Expenses section where any kind of expense can be created, named, gi
 ### Correction (same day) - existing October entries now count
 Opening amount + every invoice/cash entry dated in October (already saved or added later); the creation-time cut-off was removed. Pushed to main as 717f5f4.
 
+
+## 2026-10-28 - Removed the October opening balance
+Opening amounts and the this-month boxes on the Invoices/Cash pages removed (dashboard tiles are plain sums again); dashboard Expenses tile and Expenses filter position kept. Pushed to main as fcfd34a.

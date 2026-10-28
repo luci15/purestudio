@@ -38,3 +38,4 @@ Single `index.html` (inline CSS + JS) + `supabase-adapter.js` (Firestore-like wr
 - 2026-10-20 — **Multiple super admins**: `OWNER_EMAIL` comma list; owners can't be edited via app; `MAX_USERS` counts them. Two-owner tests 22/22 + 21/21.
 - 2026-10-20 — **Expenses tab** (`expenses` collection; name/type/amount/date/Paid-Unpaid status column, toggle chip, filters). Needs `schema.sql` re-run on Supabase. Local run: `python -m http.server 8080 --directory public`. expenses_test 36/36.
 - 2026-10-21 — Dashboard **Expenses — <month>** tile (paid/unpaid split, follows month picker); Expenses filters moved right. Local branch `auth-hardening` only; live `main` doesn't have them yet.
+- 2026-10-28 — **Opening balance removed** (live main fcfd34a + local). Dashboard tiles are plain monthly sums; kept dashboard Expenses tile + Expenses filter position. Login work still only on local branch `auth-hardening`.
