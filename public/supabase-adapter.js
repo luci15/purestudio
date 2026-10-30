@@ -493,44 +493,38 @@
   function requireLogin(message) {
     if (authEventSent) return;
     authEventSent = true;
-    window.dispatchEvent(new CustomEvent('purestudio:auth-required', { detail: { configured: true, message: message || '' } }));
+    window.dispatchEvent(new CustomEvent('purestudio:auth-required', { detail: { configured: true, setup: false, message: message || '' } }));
   }
 
   function fetchSession() {
     return apiFetch('/api/auth?action=session', undefined, 'GET').then(function(r) {
       if (r.status === 404 && isLocalHost()) return { status: 'noapi' };
       if (!r.ok) return { status: 'error', message: r.body.error || ('Server error (' + r.status + ')') };
-      return { status: 'ok', configured: r.body.configured !== false, authenticated: !!r.body.authenticated, email: r.body.email, role: r.body.role };
+      return { status: 'ok', configured: r.body.configured !== false, passwordSet: r.body.passwordSet !== false, authenticated: !!r.body.authenticated };
     }).catch(function() {
       return isLocalHost() ? { status: 'noapi' } : { status: 'error', message: 'Cannot reach the server. Check your connection and reload.' };
     });
   }
 
-  function simpleAuthCall(action, body) {
+  // login and first-time setup share the same ending: resume start-up, or reload if the session had expired mid-use
+  function authCall(action, body) {
     return apiFetch('/api/auth?action=' + action, body).then(function(r) {
-      if (r.status === 401 && action === 'change' && r.body.attemptsLeft === undefined) requireLogin('Your session ended. Please sign in again.');
-      return { ok: r.ok, error: r.body.error || '', retryAfter: r.body.retryAfter || 0, attemptsLeft: r.body.attemptsLeft };
+      if (r.ok) {
+        authEventSent = false;
+        if (pendingLoginResolve) { var f = pendingLoginResolve; pendingLoginResolve = null; f(); }
+        else location.reload();
+        return { ok: true };
+      }
+      return { ok: false, error: r.body.error || 'Something went wrong', retryAfter: r.body.retryAfter || 0, attemptsLeft: r.body.attemptsLeft,
+        configured: r.body.configured, passwordSet: r.body.passwordSet, needsSetupCode: !!r.body.needsSetupCode };
     }).catch(function() { return { ok: false, error: 'Cannot reach the server. Check your connection.' }; });
   }
 
   window.PureStudioAuth = {
     deviceId: deviceId,
     session: fetchSession,
-    login: function(email, password) {
-      return apiFetch('/api/auth?action=login', { email: email, password: password }).then(function(r) {
-        if (r.ok) {
-          authEventSent = false;
-          if (pendingLoginResolve) { var f = pendingLoginResolve; pendingLoginResolve = null; f(); }
-          else location.reload();
-          return { ok: true };
-        }
-        return { ok: false, error: r.body.error || 'Sign-in failed', retryAfter: r.body.retryAfter || 0, attemptsLeft: r.body.attemptsLeft, configured: r.body.configured };
-      }).catch(function() { return { ok: false, error: 'Cannot reach the server. Check your connection.' }; });
-    },
-    // Each returns { ok, error, retryAfter } so the UI can show the message as-is.
-    forgot: function(email) { return simpleAuthCall('forgot', { email: email }); },
-    reset: function(token, password) { return simpleAuthCall('reset', { token: token, password: password }); },
-    changePassword: function(current, password) { return simpleAuthCall('change', { current: current, password: password }); },
+    login: function(password) { return authCall('login', { password: password }); },
+    setup: function(code, password) { return authCall('setup', { code: code, password: password }); },
     logout: function() {
       var done = function() {
         try {
@@ -540,10 +534,7 @@
       };
       return apiFetch('/api/auth?action=logout').then(done, done);
     },
-    me: null, // { email, role: 'owner'|'staff' } once signed in
     defaults: function() { return apiFetch('/api/db', { op: 'defaults' }); },
-    users: function() { return apiFetch('/api/users', undefined, 'GET'); },
-    usersAction: function(body) { return apiFetch('/api/users', body); },
     security: function() { return apiFetch('/api/security', undefined, 'GET'); },
     securityAction: function(body) { return apiFetch('/api/security', body); }
   };
@@ -553,7 +544,7 @@
       pendingLoginResolve = resolve;
       authEventSent = true;
       window.dispatchEvent(new CustomEvent('purestudio:auth-required', {
-        detail: { configured: session.configured !== false, message: session.status === 'error' ? session.message : '' }
+        detail: { configured: session.configured !== false, setup: session.status === 'ok' && session.passwordSet === false, message: session.status === 'error' ? session.message : '' }
       }));
     });
   }
@@ -627,8 +618,7 @@
   window.getPureStudioDb = async function() {
     var s = await fetchSession();
     if (s.status === 'noapi') { updateSyncBadge('local'); return null; }
-    if (!(s.status === 'ok' && s.configured && s.authenticated)) { await waitForLogin(s); s = await fetchSession(); }
-    window.PureStudioAuth.me = { email: s.email, role: s.role };
+    if (!(s.status === 'ok' && s.configured && s.authenticated)) await waitForLogin(s);
     updateSyncBadge('cloud');
     console.log('%c[Pure Studio] Signed in - cloud sync active', 'color:#2F7D4F;font-weight:bold;');
     return createGatewayDb();

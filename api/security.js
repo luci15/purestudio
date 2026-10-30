@@ -5,7 +5,7 @@
 const c = require('./_lib/core');
 
 module.exports = c.handle(async function (req, res) {
-  var ctx = await c.requireSession(req, res, 'owner'); // super admin only
+  var ctx = await c.requireSession(req, res);
   if (!ctx) return;
 
   if (req.method === 'GET') {

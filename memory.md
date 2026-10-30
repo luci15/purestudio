@@ -5,27 +5,23 @@ Knowledge base + work history for this repo. Update after every task. Per-task d
 ## Stack (one-liner)
 Single `index.html` (inline CSS + JS) + `supabase-adapter.js` (Firestore-like wrapper) + Vercel functions in `api/` + `schema.sql`. No build step, no npm deps for the app. GST billing + Cash Dealings ledger for a Mumbai studio — real client data.
 
-## Architecture (since 2026-10-18)
-- Browser → `/api/db` (session cookie) → Supabase REST with **service-role key**. The browser holds no key; the anon key is used server-side only (Supabase Auth calls). Tables: `clients, invoices, settings, cash_entries` (`{id text, data jsonb}`), `auth_attempts`, `blocked_entities`, `auth_state`, `app_users`. RLS on, no policies.
-- `api/auth.js` (`?action=session|login|logout|forgot|reset|change`), `api/db.js`, `api/security.js` + `api/users.js` (**super admin only**: block list / staff management), `api/keepalive.js` (daily cron), `api/_lib/core.js` (shared).
-- `window.PureStudioAuth` (adapter) = sign-in client; `getPureStudioDb()` returns `null` when `/api` is missing on localhost → local-storage mode, no login (dev only; non-localhost fails closed).
-- No realtime socket anymore: each listener polls every 30s, skipping no-op updates.
+## Architecture (password version, 2026-10-30)
+- Browser → `/api/db` (session cookie) → Supabase REST with the **service-role key**. The browser holds no key. Tables: `clients, invoices, settings, cash_entries, expenses` (`{id text, data jsonb}`), plus `auth_attempts`, `blocked_entities`, `auth_state`. RLS on, no policies.
+- **One site password, permanent.** First visit → "Create your password" (needs `SETUP_CODE` env var + 12+ char password) → scrypt hash stored once in `auth_state` (`password_hash`). No users, no email, no reset flow. Recovery: delete that row in Supabase → setup screen returns (old sessions die).
+- `api/auth.js` (`?action=session|setup|login|logout`), `api/db.js`, `api/security.js` (attempt log + block/unblock), `api/keepalive.js` (daily cron), `api/_lib/core.js` (shared). `window.PureStudioAuth` (adapter) is the browser client; `getPureStudioDb()` returns `null` when `/api` is missing on localhost → local-storage mode, no password (dev only; real hosts fail closed).
+- Rate limit: 5 wrong password/setup-code attempts per IP *or* device per 15 min → lock; 20 in 24h → auto-block 24h; IPv6 per /64. Login fails closed if DB unreachable. Device id is a localStorage random id (bypassable) — IP + limits are the real backstop.
+- Web root is `public/` (only index.html, adapter, logo, 404.html are served). Business details live in `api/_lib/default-business.json` and are only sent to signed-in users.
+- No realtime socket: listeners poll every 30s, skipping no-op updates.
 
 ## Env vars (Vercel)
-`SUPABASE_URL`, `SUPABASE_ANON_KEY` (server-only), `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_EMAIL` (one email, or several comma-separated = several super admins), `SESSION_SECRET` (≥32 chars), `CRON_SECRET`, optional `SITE_URL`, `SESSION_HOURS`, `MAX_USERS` (default 3 accounts counting every super admin + staff; = number of super admins → no staff). Secrets: `node scripts/setup-auth.js`. The password lives in **Supabase Auth** (one user, sign-ups OFF).
-
-- **Public vs private:** the site is one URL/one sign-in screen for everyone. Stranger sees only the login card. Business details (bank/UPI/GSTIN/address/terms) live in `api/_lib/default-business.json`, served only to signed-in users via `/api/db {op:'defaults'}`; `index.html` has blanks. Legacy `pure-studio-dashboard.html` + `test_script.js` still contain them but live outside `public/`, so they are no longer served; they remain in git history (keep the repo private).
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SETUP_CODE`; optional `CRON_SECRET`, `SESSION_HOURS`. (`SUPABASE_ANON_KEY` no longer used.)
 
 ## FAQ / known answers
 - **Supabase free project paused?** Dashboard → project → *Restore project* (data kept 90 days). Prevent: daily Vercel cron `/api/keepalive` (needs `CRON_SECRET`).
-- **Forgot password:** sign-in screen → "Forgot password?" → Supabase emails a link (needs Site URL + Redirect URL set in Supabase Auth). **Change password:** Security panel. Both sign every other device out. Emergency: set a new password in Supabase → Authentication → Users, or rotate `SESSION_SECRET` to sign everyone out.
-- **Users:** super admin (`OWNER_EMAIL`, only changeable in Supabase) + staff added from *Account & security → Users* (user ID = email, admin sets the initial password). Staff = everything except users/security. Signing in requires being in `app_users` (a bare Supabase Auth user can't). Disable/remove/reset ends that user's sessions immediately.
-- **Locked out / IP blocked by mistake:** wait 15 min (rate limit), or delete the row in Supabase table `blocked_entities` (Table Editor). Auto-blocks expire after 24h.
-- **Rate-limit rules:** 5 failed logins/15 min per IP *or* device → lock; 20 failed/24h → auto-block 24h. IPv6 per /64. Login fails closed if DB unreachable.
-- **Device blacklist caveat:** device id is a random localStorage id — bypassable by clearing site data; IP + rate limits are the real backstop.
-- **Deploy order for existing installs:** deploy code first, then run `schema.sql` (it drops the old open anon policies; old frontend breaks after).
-- **Testing:** the machine is often memory-starved; headless Chrome gets very slow/crashes. Block fonts/cdnjs in Playwright (`route` abort), use 90s timeouts, `waitUntil:'domcontentloaded'`. Test harness (mock PostgREST + Vercel-style req/res shim) was kept outside the repo.
-- `pkill` doesn't exist in this shell — kill node via PowerShell `Get-CimInstance Win32_Process`.
+- **Forgot the password:** Supabase Table Editor → `auth_state` → delete the `password_hash` row → visit the site → setup screen (needs `SETUP_CODE`).
+- **Locked out / IP blocked by mistake:** wait 15 min, or delete the row in `blocked_entities`. Auto-blocks expire after 24h.
+- **Deploy order for existing installs:** deploy code first, then run `schema.sql` (it drops the old open anon policies; the old frontend breaks after).
+- **Testing:** the machine is often memory-starved; headless Chrome gets slow. Use jsdom (scratchpad) with a mock PostgREST harness; block fonts/cdnjs in Playwright; `pkill` doesn't exist — kill node via PowerShell `Get-CimInstance Win32_Process`.
 
 ## Work done
 - 2026-09-07 — client punch list (12 items): auto numbering, payments, WhatsApp/email share, GST fix, cash ledger, etc.
@@ -39,3 +35,4 @@ Single `index.html` (inline CSS + JS) + `supabase-adapter.js` (Firestore-like wr
 - 2026-10-20 — **Expenses tab** (`expenses` collection; name/type/amount/date/Paid-Unpaid status column, toggle chip, filters). Needs `schema.sql` re-run on Supabase. Local run: `python -m http.server 8080 --directory public`. expenses_test 36/36.
 - 2026-10-21 — Dashboard **Expenses — <month>** tile (paid/unpaid split, follows month picker); Expenses filters moved right. Local branch `auth-hardening` only; live `main` doesn't have them yet.
 - 2026-10-28 — **Opening balance removed** (live main fcfd34a + local). Dashboard tiles are plain monthly sums; kept dashboard Expenses tile + Expenses filter position. Login work still only on local branch `auth-hardening`.
+- 2026-10-30 — **Password version for deploy**: single permanent site password (first-visit setup with `SETUP_CODE`), rate limiting + IP/device blocklist + Security panel; Supabase Auth/staff/email-reset removed. API 89/89.

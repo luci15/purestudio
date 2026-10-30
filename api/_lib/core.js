@@ -1,29 +1,19 @@
 'use strict';
-// Shared server helpers for the Pure Studio API (sessions, rate limits, blocklist, Supabase REST + Auth).
-// Files under api/_lib are not exposed as routes by Vercel.
+// Shared server helpers for the Pure Studio API: one site password (set once, then permanent), signed session
+// cookies, rate limiting, IP/device blocklist, and the Supabase REST gateway. Files under api/_lib are not routes.
 const crypto = require('crypto');
 
 const TABLES = ['clients', 'invoices', 'settings', 'cash_entries', 'expenses'];
 const SESSION_COOKIE = 'ps_session';
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
-const MAX_FAILS = 5;                       // failed logins per IP / per device per window
-const AUTO_BLOCK_FAILS = 20;               // failed logins in 24h -> auto-block
+const MAX_FAILS = 5;                       // failed attempts per IP / per device per window
+const AUTO_BLOCK_FAILS = 20;               // failed attempts in 24h -> auto-block
 const AUTO_BLOCK_MS = 24 * 60 * 60 * 1000;
 const DEVICE_RE = /^[A-Za-z0-9_-]{16,64}$/;
 const MIN_PASSWORD = 12;
 
 function env(name) { return (process.env[name] || '').trim(); }
-// OWNER_EMAIL may list several super admins, separated by commas: owner1@x.com, owner2@x.com
-function ownerEmails() { return env('OWNER_EMAIL').split(/[,;\s]+/).map(function (e) { return e.trim().toLowerCase(); }).filter(Boolean); }
-function isOwnerEmail(email) { return ownerEmails().indexOf(String(email || '').trim().toLowerCase()) !== -1; }
-// Total accounts allowed, counting every super admin (OWNER_EMAIL) plus staff.
-function maxUsers() { return Math.min(Math.max(parseInt(env('MAX_USERS'), 10) || 3, 1), 10); }
-var EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
-
-function authConfigured() {
-  return !!(ownerEmails().length && env('SESSION_SECRET').length >= 32 &&
-    env('SUPABASE_URL') && env('SUPABASE_SERVICE_ROLE_KEY') && env('SUPABASE_ANON_KEY'));
-}
+function authConfigured() { return !!(env('SUPABASE_URL') && env('SUPABASE_SERVICE_ROLE_KEY')); }
 
 function send(res, status, body, extraHeaders) {
   res.setHeader('Cache-Control', 'no-store');
@@ -60,9 +50,39 @@ function getDeviceId(req) {
 }
 function getUserAgent(req) { return String((req.headers || {})['user-agent'] || '').slice(0, 200); }
 
+// ---------- password (scrypt) ----------
+function hashPassword(password) {
+  var N = 16384, r = 8, p = 1;
+  var salt = crypto.randomBytes(16);
+  var hash = crypto.scryptSync(password, salt, 64, { N: N, r: r, p: p });
+  return ['scrypt', N, r, p, salt.toString('base64'), hash.toString('base64')].join('$');
+}
+function verifyPassword(password, stored) {
+  try {
+    var parts = String(stored).split('$');
+    if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
+    var N = +parts[1], r = +parts[2], p = +parts[3];
+    var salt = Buffer.from(parts[4], 'base64');
+    var expected = Buffer.from(parts[5], 'base64');
+    var got = crypto.scryptSync(String(password), salt, expected.length, { N: N, r: r, p: p, maxmem: 256 * N * r });
+    return got.length === expected.length && crypto.timingSafeEqual(got, expected);
+  } catch (e) { return false; }
+}
+function safeEqualStr(a, b) {
+  var ha = crypto.createHash('sha256').update(String(a)).digest();
+  var hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+// Identifies the current password: a session is only valid while it carries this id, so re-doing the
+// first-time setup (after deleting the stored password) signs out every old session.
+function hashId(storedHash) { return crypto.createHash('sha256').update(String(storedHash)).digest('base64url').slice(0, 16); }
+
 // ---------- sessions (HMAC-signed, HttpOnly cookie) ----------
+// The signing key is derived from the server-only service-role key, so there is no extra secret to configure
+// and rotating that key also signs everyone out.
+function sessionKey() { return crypto.createHmac('sha256', env('SUPABASE_SERVICE_ROLE_KEY')).update('purestudio-session-v1').digest(); }
 function sessionHours() { return Math.min(Math.max(parseInt(env('SESSION_HOURS'), 10) || 24, 1), 24 * 30); }
-function hmac(body) { return crypto.createHmac('sha256', env('SESSION_SECRET')).update(body).digest('base64url'); }
+function hmac(body) { return crypto.createHmac('sha256', sessionKey()).update(body).digest('base64url'); }
 function signSession(payload) {
   var body = Buffer.from(JSON.stringify(payload)).toString('base64url');
   return body + '.' + hmac(body);
@@ -92,17 +112,12 @@ function isHttps(req) { return String((req.headers || {})['x-forwarded-proto'] |
 function cookieString(req, value, maxAgeSec) {
   return SESSION_COOKIE + '=' + value + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' + maxAgeSec + (isHttps(req) ? '; Secure' : '');
 }
-function setSessionCookie(req, res, email, deviceId) {
+function setSessionCookie(req, res, deviceId, pwHash) {
   var ms = sessionHours() * 3600 * 1000;
-  var token = signSession({ u: email, d: deviceId, iat: Date.now(), exp: Date.now() + ms });
+  var token = signSession({ d: deviceId, h: hashId(pwHash), iat: Date.now(), exp: Date.now() + ms });
   res.setHeader('Set-Cookie', cookieString(req, token, Math.floor(ms / 1000)));
 }
 function clearSessionCookie(req, res) { res.setHeader('Set-Cookie', cookieString(req, '', 0)); }
-function safeEqualStr(a, b) {
-  var ha = crypto.createHash('sha256').update(String(a)).digest();
-  var hb = crypto.createHash('sha256').update(String(b)).digest();
-  return crypto.timingSafeEqual(ha, hb);
-}
 
 // ---------- Supabase REST (service role, server only) ----------
 function baseUrl() { return env('SUPABASE_URL').replace(/\/+$/, '').replace(/\/rest\/v1$/i, ''); }
@@ -135,97 +150,30 @@ async function sb(method, path, opts) {
   if (!res.ok) {
     console.error('[api] supabase ' + res.status + ' ' + method + ' ' + path.split('?')[0] + ': ' + ((data && data.message) || ''));
     if (res.status >= 500) throw unavailable();
-    var err = new Error('Database error');
-    err.status = 502;
+    var err = new Error(res.status === 404 ? 'Database tables are missing - run schema.sql in the Supabase SQL editor' : 'Database error');
+    err.status = res.status === 404 ? 503 : 502;
     throw err;
   }
   return data;
 }
 
-// ---------- Supabase Auth (GoTrue) — used only server-side; its tokens never reach the browser ----------
-// Returns { status, data }. 4xx are returned for the caller to interpret; network/5xx/429 throw 503.
-async function gotrue(method, path, opts) {
-  opts = opts || {};
-  var anon = env('SUPABASE_ANON_KEY');
-  var headers = { apikey: opts.admin ? env('SUPABASE_SERVICE_ROLE_KEY') : anon, 'Content-Type': 'application/json' };
-  if (opts.admin) { if (env('SUPABASE_SERVICE_ROLE_KEY').indexOf('eyJ') === 0) headers.Authorization = 'Bearer ' + env('SUPABASE_SERVICE_ROLE_KEY'); }
-  else if (opts.token) headers.Authorization = 'Bearer ' + opts.token;      // a user's own access token
-  else if (anon.indexOf('eyJ') === 0) headers.Authorization = 'Bearer ' + anon; // legacy JWT anon key only (new sb_publishable_ keys go in apikey only)
-  var res;
-  try {
-    res = await fetch(baseUrl() + '/auth/v1/' + path, {
-      method: method,
-      headers: headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-      signal: AbortSignal.timeout(10000)
-    });
-  } catch (e) { throw unavailable(); }
-  var text = await res.text();
-  var data = null;
-  if (text) { try { data = JSON.parse(text); } catch (e) { data = null; } }
-  if (res.status >= 500 || res.status === 429) {
-    console.error('[api] gotrue ' + res.status + ' ' + method + ' ' + path.split('?')[0]);
-    var e2 = new Error(res.status === 429 ? 'Too many requests to the sign-in service. Try again in a minute.' : 'Sign-in service unavailable (is the Supabase project paused?)');
-    e2.status = 503;
-    throw e2;
-  }
-  return { status: res.status, data: data || {} };
+// ---------- the stored password ----------
+var pwCache = { at: 0, hash: null };
+async function getPasswordHash(fresh) {
+  if (!fresh && pwCache.hash && Date.now() - pwCache.at < 30000) return pwCache.hash;
+  var rows = await sb('GET', 'auth_state?select=value&key=eq.password_hash&limit=1');
+  var h = (rows && rows[0] && rows[0].value) || null;
+  pwCache = { at: Date.now(), hash: h };
+  return h;
 }
-
-// ---------- users: the super admin(s) (OWNER_EMAIL) + staff in app_users, MAX_USERS accounts in total ----------
-var userCache = { at: 0, rows: [] };
-function invalidateUsers() { userCache.at = 0; }
-async function loadUsers() {
-  if (Date.now() - userCache.at < 15000) return userCache.rows;
-  var rows = await sb('GET', 'app_users?select=email,role,active,created_at,created_by&order=created_at.asc&limit=50');
-  userCache = { at: Date.now(), rows: rows || [] };
-  return userCache.rows;
-}
-// { email, role: 'owner'|'staff' } for an allowed, active account; null otherwise.
-async function getMember(email) {
-  email = String(email || '').trim().toLowerCase();
-  if (!email) return null;
-  if (isOwnerEmail(email)) return { email: email, role: 'owner' };
-  var rows = await loadUsers();
-  var row = rows.find(function (r) { return r.email === email && r.active; });
-  return row ? { email: email, role: row.role || 'staff' } : null;
-}
-
-// Password check via Supabase Auth. Any other outcome (wrong password, not an allowed account, unconfirmed) is a plain "no".
-async function verifyUserPassword(email, password) {
-  email = String(email || '').trim().toLowerCase();
-  var r = await gotrue('POST', 'token?grant_type=password', { body: { email: email, password: String(password || '') } });
-  var user = r.data && r.data.user;
-  if (r.status === 200 && user && String(user.email || '').toLowerCase() === email) {
-    var member = await getMember(email);
-    if (member) return { ok: true, user: user, member: member };
-  }
-  return { ok: false };
-}
-
-// Supabase Auth admin helpers (service role)
-async function authAdminFind(email) {
-  var r = await gotrue('GET', 'admin/users?per_page=200', { admin: true });
-  var list = (r.data && r.data.users) || [];
-  return list.find(function (u) { return String(u.email || '').toLowerCase() === email; }) || null;
-}
-
-// ---------- "sign this user out everywhere" marker (set on password change/reset/disable) ----------
-var validAfterCache = {};
-async function getValidAfter(email) {
-  var c = validAfterCache[email];
-  if (c && Date.now() - c.at < 30000) return c.value;
-  var rows = await sb('GET', 'auth_state?select=value&key=eq.' + encodeURIComponent('valid_after:' + email) + '&limit=1');
-  var v = (rows && rows[0] && parseInt(rows[0].value, 10)) || 0;
-  validAfterCache[email] = { at: Date.now(), value: v };
-  return v;
-}
-async function setValidAfter(email, ms) {
-  await sb('POST', 'auth_state?on_conflict=key', {
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: { key: 'valid_after:' + email, value: String(ms) }
+// Stores the password only if none exists yet (the first writer wins). Returns true if this call stored it.
+async function storePasswordOnce(hash) {
+  var rows = await sb('POST', 'auth_state?on_conflict=key', {
+    headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+    body: { key: 'password_hash', value: hash }
   });
-  validAfterCache[email] = { at: Date.now(), value: ms };
+  pwCache = { at: 0, hash: null };
+  return Array.isArray(rows) && rows.length === 1;
 }
 
 // ---------- blocklist (cached briefly per instance) ----------
@@ -263,7 +211,7 @@ function rateLimit(key, limit, windowMs) {
   return b.n <= limit ? 0 : Math.max(1, Math.ceil((b.reset - now) / 1000));
 }
 
-// ---------- login attempt log / lockout ----------
+// ---------- attempt log / lockout ----------
 async function recentFailures(column, value, sinceMs, limit) {
   var since = new Date(Date.now() - sinceMs).toISOString();
   return (await sb('GET', 'auth_attempts?select=created_at&' + column + '=eq.' + encodeURIComponent(value) +
@@ -299,7 +247,7 @@ async function autoBlock(kind, column, value) {
   if (!value) return;
   var rows = await recentFailures(column, value, AUTO_BLOCK_MS, AUTO_BLOCK_FAILS);
   if (rows.length >= AUTO_BLOCK_FAILS) {
-    await addBlock(kind, value, 'Auto: ' + AUTO_BLOCK_FAILS + ' failed logins in 24h', 'auto', new Date(Date.now() + AUTO_BLOCK_MS).toISOString());
+    await addBlock(kind, value, 'Auto: ' + AUTO_BLOCK_FAILS + ' failed attempts in 24h', 'auto', new Date(Date.now() + AUTO_BLOCK_MS).toISOString());
   }
 }
 // Logs a failed attempt, applies auto-block, returns { attemptsLeft, retryAfter } for the response.
@@ -313,17 +261,8 @@ async function recordFailure(ip, deviceId, ua, label, lockState) {
 }
 
 // ---------- session gate for data endpoints ----------
-// True if the cookie is for an allowed, active account, on this device, issued after any sign-out marker.
-async function sessionValid(session, deviceId) {
-  if (!session || session.d !== deviceId || !session.u) return null;
-  var member = await getMember(session.u);
-  if (!member) return null;
-  if (session.iat < await getValidAfter(member.email)) return null;
-  return member;
-}
-// Returns { ip, deviceId, session, member } or sends the error response and returns null.
-// requireSession(req, res, 'owner') additionally restricts to the super admin.
-async function requireSession(req, res, only) {
+// Returns { ip, deviceId } or sends the error response and returns null.
+async function requireSession(req, res) {
   if (!authConfigured()) { send(res, 503, { error: 'Server login is not configured' }); return null; }
   var session = verifySession(parseCookies(req)[SESSION_COOKIE]);
   if (!session) { send(res, 401, { error: 'Not signed in' }); return null; }   // e.g. someone typing an /api URL in the address bar
@@ -333,12 +272,11 @@ async function requireSession(req, res, only) {
   var ip = getIp(req);
   var wait = rateLimit('api:' + ip, 240, 60 * 1000);
   if (wait) { send(res, 429, { error: 'Too many requests' }, { 'Retry-After': String(wait) }); return null; }
-  var member = await sessionValid(session, deviceId);
-  if (!member) { clearSessionCookie(req, res); send(res, 401, { error: 'Not signed in' }); return null; }
+  var pw = await getPasswordHash();
+  if (!pw || session.h !== hashId(pw)) { clearSessionCookie(req, res); send(res, 401, { error: 'Not signed in' }); return null; }
   var blocked = await findBlock(ip, deviceId);
   if (blocked) { clearSessionCookie(req, res); send(res, 403, { error: 'Access denied' }); return null; }
-  if (only === 'owner' && member.role !== 'owner') { send(res, 403, { error: 'Super admin only' }); return null; }
-  return { ip: ip, deviceId: deviceId, session: session, member: member };
+  return { ip: ip, deviceId: deviceId };
 }
 
 // Wraps a handler so unexpected failures return clean JSON instead of leaking internals.
@@ -353,11 +291,10 @@ function handle(fn) {
 }
 
 module.exports = {
-  TABLES, SESSION_COOKIE, LOGIN_WINDOW_MS, MAX_FAILS, AUTO_BLOCK_FAILS, AUTO_BLOCK_MS, DEVICE_RE, MIN_PASSWORD, EMAIL_RE,
-  env, ownerEmails, isOwnerEmail, maxUsers, authConfigured, send, handle, getIp, getDeviceId, getUserAgent, normalizeIp,
+  TABLES, SESSION_COOKIE, LOGIN_WINDOW_MS, MAX_FAILS, AUTO_BLOCK_FAILS, AUTO_BLOCK_MS, DEVICE_RE, MIN_PASSWORD,
+  env, authConfigured, send, handle, getIp, getDeviceId, getUserAgent, normalizeIp,
   parseCookies, verifySession, setSessionCookie, clearSessionCookie, sessionHours, safeEqualStr,
-  sb, gotrue, verifyUserPassword, authAdminFind, loadUsers, getMember, invalidateUsers,
-  getValidAfter, setValidAfter, sessionValid,
-  findBlock, addBlock, invalidateBlocks, loadBlocks, rateLimit,
+  hashPassword, verifyPassword, hashId, getPasswordHash, storePasswordOnce,
+  sb, findBlock, addBlock, invalidateBlocks, loadBlocks, rateLimit,
   recentFailures, logAttempt, checkLock, recordFailure, requireSession
 };

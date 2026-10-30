@@ -66,24 +66,15 @@ create table if not exists public.blocked_entities (
   unique (kind, value)
 );
 
--- 7. Small key/value store for auth state (e.g. "sign everyone out" marker after a password change)
+-- 7. Small key/value store for auth state: holds the site password (scrypt hash, never the password itself).
+--    Delete the row with key = 'password_hash' to run the first-time password setup again.
 create table if not exists public.auth_state (
   key text primary key,
   value text not null,
   updated_at timestamp with time zone not null default now()
 );
 
--- 8. Staff accounts the super admin has created (OWNER_EMAIL itself is not stored here).
---    Passwords live in Supabase Auth; this table says who is allowed in, and lets the super admin disable someone.
-create table if not exists public.app_users (
-  email text primary key,
-  role text not null default 'staff' check (role in ('staff')),
-  active boolean not null default true,
-  created_by text,
-  created_at timestamp with time zone not null default now()
-);
-
--- 9. Lock everything down: RLS on, NO policies, no grants for the public roles.
+-- 8. Lock everything down: RLS on, NO policies, no grants for the public roles.
 --    (The service-role key used by /api bypasses RLS.)
 alter table public.clients enable row level security;
 alter table public.invoices enable row level security;
@@ -93,7 +84,6 @@ alter table public.expenses enable row level security;
 alter table public.auth_attempts enable row level security;
 alter table public.blocked_entities enable row level security;
 alter table public.auth_state enable row level security;
-alter table public.app_users enable row level security;
 
 -- Remove the old "anyone with the anon key can read/write" policies from earlier versions
 drop policy if exists "Allow all operations for anon on clients" on public.clients;
@@ -102,4 +92,4 @@ drop policy if exists "Allow all operations for anon on settings" on public.sett
 drop policy if exists "Allow all operations for anon on cash_entries" on public.cash_entries;
 
 revoke all on table public.clients, public.invoices, public.settings, public.cash_entries, public.expenses,
-  public.auth_attempts, public.blocked_entities, public.auth_state, public.app_users from anon, authenticated;
+  public.auth_attempts, public.blocked_entities, public.auth_state from anon, authenticated;

@@ -265,3 +265,16 @@ Opening amount + every invoice/cash entry dated in October (already saved or add
 
 ## 2026-10-28 - Removed the October opening balance
 Opening amounts and the this-month boxes on the Invoices/Cash pages removed (dashboard tiles are plain sums again); dashboard Expenses tile and Expenses filter position kept. Pushed to main as fcfd34a.
+
+## 2026-10-30 — Password protection, first-time setup, permanent password (for deploy)
+
+Request: ship the password security with rate limiting; ask for the password on first use and make it the permanent password.
+
+- **Design change:** the earlier Supabase-Auth / email / staff / super-admin version (kept on local branch history) was replaced by a single site password. No emails, no staff, no reset-by-email — the password is permanent.
+- **First visit** shows "Create your password": `SETUP_CODE` (env var only the owner knows — prevents a stranger from claiming the password first) + new password (12+ chars, typed twice). Stored as an scrypt hash in `auth_state` (`password_hash`), insert-only so the first writer wins; setup is then closed. Race-tested: of two simultaneous setups exactly one wins.
+- **Login:** password only. Wrong setup codes and wrong passwords both count toward the lockout: 5 per IP/device per 15 min → locked with a countdown; 20 in 24h → auto-block 24h; IPv6 per /64. Security panel kept (attempt log, block/unblock IP or device; blocked IPs are cut off mid-session).
+- Sessions: HttpOnly, SameSite=Strict, bound to the device and to the current password (deleting the stored password and re-running setup signs everyone out). Signing key derived from the service-role key — no `SESSION_SECRET` to configure.
+- Recovery without email: delete the `password_hash` row in Supabase `auth_state`.
+- Removed: Supabase Auth use, `OWNER_EMAIL`, `MAX_USERS`, staff accounts, forgot/change password, `api/users.js`, `scripts/setup-auth.js`, `app_users` table.
+- Env vars to set in Vercel: `SUPABASE_URL` (already there), `SUPABASE_SERVICE_ROLE_KEY`, `SETUP_CODE` (+ optional `CRON_SECRET`, `SESSION_HOURS`). `SUPABASE_ANON_KEY` is no longer used. Then run `schema.sql`.
+- Tests (simulated browser + mock database): API 89/89; UI suite in `pw_ui_test` (see end-of-session summary).

@@ -867,7 +867,7 @@ button.chip:hover{filter:brightness(0.95);}
       </button>
       <button class="footer-link" id="btnSecurity" hidden>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg>
-        Account &amp; security
+        Security &amp; sign out
       </button>
       <div id="syncBadge" style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:4px 8px;border-radius:6px;background:var(--surface-2);color:var(--ink-muted);margin-top:6px;">🟡 Local Storage</div>
     </div>
@@ -876,7 +876,7 @@ button.chip:hover{filter:brightness(0.95);}
   <header class="mobile-topbar">
     <span class="name">Pure Studio</span>
     <span style="display:inline-flex;gap:2px;">
-      <button class="icon-btn" id="btnSecurityMobile" aria-label="Account &amp; security" hidden>
+      <button class="icon-btn" id="btnSecurityMobile" aria-label="Security &amp; sign out" hidden>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg>
       </button>
       <button class="icon-btn" id="btnSettingsMobile" aria-label="Business &amp; bank details">
@@ -1344,60 +1344,26 @@ button.chip:hover{filter:brightness(0.95);}
     <div class="auth-brand">Pure Studio</div>
     <div class="auth-sub">Client &amp; Revenue Ledger</div>
     <div class="auth-msg" id="authChecking">Checking session…</div>
-    <div class="auth-ok" id="authNotice" role="status" hidden></div>
     <div class="auth-error" id="authError" role="alert" hidden></div>
     <form id="authForm" autocomplete="on" hidden>
-      <div class="field"><label for="authEmail">Email</label><input type="email" id="authEmail" name="email" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
       <div class="field"><label for="authPass">Password</label><input type="password" id="authPass" name="password" autocomplete="current-password" required></div>
-      <button type="submit" class="btn primary" id="authSubmit">Sign in</button>
-      <button type="button" class="auth-link" id="authForgotLink">Forgot password?</button>
+      <button type="submit" class="btn primary" id="authSubmit">Unlock</button>
     </form>
-    <form id="authForgotForm" hidden>
-      <h3>Reset your password</h3>
-      <div class="hint-line">Enter the owner email. If it matches, a reset link is sent to it.</div>
-      <div class="field"><label for="authForgotEmail">Email</label><input type="email" id="authForgotEmail" autocomplete="email" autocapitalize="none" spellcheck="false" required></div>
-      <button type="submit" class="btn primary" id="authForgotSubmit">Send reset link</button>
-      <button type="button" class="auth-link" data-auth-back>Back to sign in</button>
-    </form>
-    <form id="authResetForm" hidden>
-      <h3>Choose a new password</h3>
-      <div class="hint-line">At least 12 characters. All other devices will be signed out.</div>
+    <form id="authSetupForm" autocomplete="off" hidden>
+      <h3>Create your password</h3>
+      <div class="hint-line">First time here. Choose the password for this site — it stays permanent. Use 12 or more characters. The setup code is the SETUP_CODE you added in Vercel.</div>
+      <div class="field"><label for="authCode">Setup code</label><input type="password" id="authCode" autocomplete="off" required></div>
       <div class="field"><label for="authNewPass">New password</label><input type="password" id="authNewPass" autocomplete="new-password" minlength="12" required></div>
-      <div class="field"><label for="authNewPass2">Repeat new password</label><input type="password" id="authNewPass2" autocomplete="new-password" minlength="12" required></div>
-      <button type="submit" class="btn primary" id="authResetSubmit">Set new password</button>
+      <div class="field"><label for="authNewPass2">Repeat password</label><input type="password" id="authNewPass2" autocomplete="new-password" minlength="12" required></div>
+      <button type="submit" class="btn primary" id="authSetupSubmit">Set password</button>
     </form>
   </div>
 </div>
 
 <div class="overlay" id="securityOverlay" hidden>
   <div class="modal wide">
-    <h2>Account &amp; security</h2>
+    <h2>Security</h2>
     <div class="modal-sub" id="secMe">Loading…</div>
-
-    <div class="section-label">Change password</div>
-    <form id="secPwForm" autocomplete="off">
-      <div class="field-row three">
-        <div class="field"><label for="secPwCur">Current password</label><input type="password" id="secPwCur" autocomplete="current-password" required></div>
-        <div class="field"><label for="secPwNew">New password (12+)</label><input type="password" id="secPwNew" autocomplete="new-password" minlength="12" required></div>
-        <div class="field"><label for="secPwNew2">Repeat new</label><input type="password" id="secPwNew2" autocomplete="new-password" minlength="12" required></div>
-      </div>
-      <div class="auth-error" id="secPwError" hidden></div>
-      <div class="auth-ok" id="secPwOk" hidden></div>
-      <button type="submit" class="btn small">Change password</button>
-    </form>
-
-    <div id="secOwnerOnly" hidden>
-    <div class="section-label">Users</div>
-    <div class="hint-line" id="usersHint"></div>
-    <div id="usersList"></div>
-    <form id="userAddForm" autocomplete="off">
-      <div class="field-row">
-        <div class="field"><label for="uEmail">User ID (email)</label><input type="email" id="uEmail" autocomplete="off" required></div>
-        <div class="field"><label for="uPass">Initial password (12+, share it with them)</label><input type="text" id="uPass" minlength="12" autocomplete="off" required></div>
-      </div>
-      <div class="auth-error" id="uError" hidden></div>
-      <button type="submit" class="btn small" id="uAdd">Add user</button>
-    </form>
 
     <div class="section-label">Block an IP or device</div>
     <form id="secBlockForm">
@@ -1419,7 +1385,6 @@ button.chip:hover{filter:brightness(0.95);}
     <div class="section-label">Recent sign-in attempts</div>
     <div class="hint-line">5 wrong passwords from one IP or device in 15 minutes locks it for 15 minutes; 20 in 24 hours blocks it for 24 hours.</div>
     <div id="secAttempts"></div>
-    </div>
 
     <div class="modal-actions">
       <button type="button" class="btn danger" id="secSignOut">Sign out</button>
@@ -3240,72 +3205,45 @@ button.chip:hover{filter:brightness(0.95);}
     if(del){ deleteExpense(del.getAttribute('data-del-expense')); return; }
   });
 
-  // ---------- Sign-in screen + security panel ----------
+  // ---------- Password screen + security panel ----------
   var Auth = window.PureStudioAuth;
   var cloudMode = false;
   var lockTimer = null;
-
-  // Reset link from the email lands here as #access_token=…&type=recovery (or #error=…). Read it once, then
-  // scrub it from the address bar so the token doesn't linger in history.
-  var recoveryToken = '', recoveryError = '';
-  (function(){
-    var h = location.hash.replace(/^#/, '');
-    if(!h) return;
-    var p = new URLSearchParams(h);
-    if(p.get('access_token') && p.get('type') === 'recovery') recoveryToken = p.get('access_token');
-    else if(p.get('error')) recoveryError = p.get('error_code') === 'otp_expired'
-      ? 'That reset link has expired or was already used. Request a new one.'
-      : (p.get('error_description') || 'The reset link did not work. Request a new one.');
-    if(recoveryToken || recoveryError){
-      try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}
-    }
-  })();
 
   function setAuthError(msg){
     var el = $('authError');
     el.textContent = msg || '';
     el.hidden = !msg;
   }
-  function setAuthNotice(msg){
-    var el = $('authNotice');
-    el.textContent = msg || '';
-    el.hidden = !msg;
-  }
-  function showAuthMode(mode){
+  function showAuthMode(mode){ // 'login' | 'setup'
     $('authChecking').hidden = true;
     $('authForm').hidden = mode !== 'login';
-    $('authForgotForm').hidden = mode !== 'forgot';
-    $('authResetForm').hidden = mode !== 'reset';
-    var focusId = {login:'authEmail', forgot:'authForgotEmail', reset:'authNewPass'}[mode];
-    setTimeout(function(){ $(focusId).focus(); }, 0);
+    $('authSetupForm').hidden = mode !== 'setup';
+    setTimeout(function(){ $(mode === 'setup' ? 'authCode' : 'authPass').focus(); }, 0);
   }
   function showAuthForm(detail){
     detail = detail || {};
     $('authScreen').hidden = false;
     if(detail.configured === false){
       $('authForm').hidden = true;
+      $('authSetupForm').hidden = true;
       $('authChecking').hidden = false;
-      $('authChecking').textContent = 'Server login is not set up yet. Add OWNER_EMAIL, SESSION_SECRET, SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY in Vercel (see README), then redeploy.';
+      $('authChecking').textContent = 'Server login is not set up yet. Add SUPABASE_SERVICE_ROLE_KEY and SETUP_CODE in Vercel (see README), then redeploy.';
       return;
     }
-    showAuthMode('login');
-    var notice = '';
-    try { notice = sessionStorage.getItem('ps_notice') || ''; sessionStorage.removeItem('ps_notice'); } catch(e) {}
-    setAuthNotice(notice);
-    setAuthError(detail.message || recoveryError || '');
-    recoveryError = '';
+    showAuthMode(detail.setup ? 'setup' : 'login');
+    setAuthError(detail.message || '');
   }
   window.addEventListener('purestudio:auth-required', function(e){ showAuthForm(e.detail); });
 
-  function startLockCountdown(sec){
-    var btn = $('authSubmit');
+  function startLockCountdown(btn, label, sec){
     var end = Date.now() + sec * 1000;
     clearInterval(lockTimer);
     function tick(){
       var left = Math.ceil((end - Date.now()) / 1000);
       if(left <= 0){
         clearInterval(lockTimer);
-        btn.disabled = false; btn.textContent = 'Sign in'; setAuthError('');
+        btn.disabled = false; btn.textContent = label; setAuthError('');
         return;
       }
       btn.textContent = 'Locked — try again in ' + Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2);
@@ -3313,55 +3251,36 @@ button.chip:hover{filter:brightness(0.95);}
     btn.disabled = true; tick();
     lockTimer = setInterval(tick, 1000);
   }
+  // Shows what the server said; if it says the password state changed (set up elsewhere / not set yet) switch screens.
+  function handleAuthFailure(r, btn, label){
+    $('authPass').value = ''; $('authNewPass').value = ''; $('authNewPass2').value = '';
+    if(r.passwordSet === false){ showAuthMode('setup'); setAuthError(''); btn.disabled = false; return; }
+    if(r.passwordSet === true){ showAuthMode('login'); setAuthError(r.error); btn.disabled = false; return; }
+    var msg = r.error;
+    if(r.attemptsLeft > 0) msg += ' (' + r.attemptsLeft + ' attempt' + (r.attemptsLeft === 1 ? '' : 's') + ' left)';
+    setAuthError(msg);
+    if(r.retryAfter) startLockCountdown(btn, label, r.retryAfter); else btn.disabled = false;
+  }
   $('authForm').addEventListener('submit', function(e){
     e.preventDefault();
     var btn = $('authSubmit');
-    btn.disabled = true; setAuthError(''); setAuthNotice('');
-    Auth.login($('authEmail').value.trim(), $('authPass').value).then(function(r){
-      if(r.ok) return; // adapter resumes startup (or reloads if the session expired mid-use)
-      $('authPass').value = '';
-      var msg = r.error;
-      if(r.attemptsLeft > 0) msg += ' (' + r.attemptsLeft + ' attempt' + (r.attemptsLeft === 1 ? '' : 's') + ' left)';
-      setAuthError(msg);
-      if(r.retryAfter) startLockCountdown(r.retryAfter); else btn.disabled = false;
-    });
-  });
-
-  $('authForgotLink').addEventListener('click', function(){
-    setAuthError(''); setAuthNotice('');
-    $('authForgotEmail').value = $('authEmail').value;
-    showAuthMode('forgot');
-  });
-  document.querySelectorAll('[data-auth-back]').forEach(function(b){
-    b.addEventListener('click', function(){ setAuthError(''); setAuthNotice(''); showAuthMode('login'); });
-  });
-  $('authForgotForm').addEventListener('submit', function(e){
-    e.preventDefault();
-    var btn = $('authForgotSubmit');
-    btn.disabled = true; setAuthError(''); setAuthNotice('');
-    Auth.forgot($('authForgotEmail').value.trim()).then(function(r){
-      btn.disabled = false;
-      if(!r.ok){ setAuthError(r.error || 'Could not send the reset link.'); return; }
-      setAuthNotice('If that email belongs to the owner account, a reset link is on its way. Check spam; it can take a few minutes.');
-    });
-  });
-  function pwMismatch(a, b){
-    if(a.length < 12) return 'Use at least 12 characters.';
-    if(a !== b) return 'The two passwords do not match.';
-    return '';
-  }
-  $('authResetForm').addEventListener('submit', function(e){
-    e.preventDefault();
-    var bad = pwMismatch($('authNewPass').value, $('authNewPass2').value);
-    if(bad){ setAuthError(bad); return; }
-    var btn = $('authResetSubmit');
     btn.disabled = true; setAuthError('');
-    Auth.reset(recoveryToken, $('authNewPass').value).then(function(r){
-      btn.disabled = false;
-      if(!r.ok){ setAuthError(r.error || 'Could not set the password.'); return; }
-      recoveryToken = '';
-      try { sessionStorage.setItem('ps_notice', 'Password updated. Sign in with your new password.'); } catch(e2) {}
-      location.reload();
+    Auth.login($('authPass').value).then(function(r){
+      if(r.ok) return; // adapter resumes start-up (or reloads if the session expired mid-use)
+      handleAuthFailure(r, btn, 'Unlock');
+    });
+  });
+  $('authSetupForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var p1 = $('authNewPass').value, p2 = $('authNewPass2').value;
+    if(p1.length < 12){ setAuthError('Use at least 12 characters.'); return; }
+    if(p1 !== p2){ setAuthError('The two passwords do not match.'); return; }
+    var btn = $('authSetupSubmit');
+    btn.disabled = true; setAuthError('');
+    Auth.setup($('authCode').value, p1).then(function(r){
+      if(r.ok) return;
+      $('authCode').value = '';
+      handleAuthFailure(r, btn, 'Set password');
     });
   });
 
@@ -3375,7 +3294,7 @@ button.chip:hover{filter:brightness(0.95);}
     el.hidden = !msg;
   }
   function renderSecurity(d){
-    $('secMe').innerHTML = esc(meLine()) + ' · You are on IP <span class="sec-mono">' + esc(d.me.ip) + '</span> · device <span class="sec-mono">' + esc(d.me.deviceId.slice(0, 8)) + '…</span>';
+    $('secMe').innerHTML = 'You are on IP <span class="sec-mono">' + esc(d.me.ip) + '</span> · device <span class="sec-mono">' + esc(d.me.deviceId.slice(0, 8)) + '…</span>';
     var now = Date.now();
     var blocked = (d.blocked || []).filter(function(b){ return !b.expires_at || new Date(b.expires_at).getTime() > now; });
     $('secBlocked').innerHTML = blocked.length ? (
@@ -3389,7 +3308,7 @@ button.chip:hover{filter:brightness(0.95);}
     ) : '<div class="sec-empty">Nothing blocked.</div>';
     var attempts = d.attempts || [];
     $('secAttempts').innerHTML = attempts.length ? (
-      '<div class="sec-scroll"><table class="sec-table"><thead><tr><th>When</th><th>Result</th><th>User</th><th>IP</th><th>Device</th></tr></thead><tbody>' +
+      '<div class="sec-scroll"><table class="sec-table"><thead><tr><th>When</th><th>Result</th><th>Action</th><th>IP</th><th>Device</th></tr></thead><tbody>' +
       attempts.map(function(a){
         return '<tr title="' + esc(a.user_agent || '') + '"><td>' + esc(fmtDateTime(a.created_at)) + '</td>' +
           '<td><span class="chip ' + (a.success ? 'paid' : 'overdue') + '">' + (a.success ? 'OK' : 'Failed') + '</span></td>' +
@@ -3398,45 +3317,6 @@ button.chip:hover{filter:brightness(0.95);}
           '<td>' + (a.device_id ? '<span class="sec-mono">' + esc(a.device_id.slice(0, 8)) + '…</span> <button class="btn small ghost" data-sec-block="device" data-value="' + esc(a.device_id) + '">Block</button>' : '') + '</td></tr>';
       }).join('') + '</tbody></table></div>'
     ) : '<div class="sec-empty">No attempts logged yet.</div>';
-  }
-  function meLine(){
-    var me = Auth.me || {};
-    return 'Signed in as ' + (me.email || '') + ' (' + (me.role === 'owner' ? 'super admin' : 'staff') + ')';
-  }
-  function userError(msg){
-    var el = $('uError');
-    el.textContent = msg || '';
-    el.hidden = !msg;
-  }
-  function renderUsers(d){
-    var users = d.users || [];
-    var owners = d.owners || 1;
-    $('usersHint').textContent = (users.length + owners) + ' of ' + d.max + ' accounts used (' + owners + ' super admin' + (owners === 1 ? '' : 's') + ' + ' + users.length + ' staff). Staff can do everything except manage users and security. Their user ID is their email.';
-    $('usersList').innerHTML = users.length ? (
-      '<div class="sec-scroll"><table class="sec-table"><thead><tr><th>User ID</th><th>Status</th><th></th></tr></thead><tbody>' +
-      users.map(function(u){
-        var em = esc(u.email);
-        return '<tr><td>' + em + '</td><td><span class="chip ' + (u.active ? 'paid' : 'overdue') + '">' + (u.active ? 'Active' : 'Disabled') + '</span></td><td>' +
-          '<button class="btn small ghost" data-user-toggle="' + em + '" data-active="' + (u.active ? '0' : '1') + '">' + (u.active ? 'Disable' : 'Enable') + '</button> ' +
-          '<button class="btn small ghost" data-user-pw="' + em + '">Set password</button> ' +
-          '<button class="btn small ghost danger" data-user-del="' + em + '">Remove</button></td></tr>';
-      }).join('') + '</tbody></table></div>'
-    ) : '<div class="sec-empty">No staff yet.</div>';
-    $('uAdd').disabled = users.length + owners >= d.max;
-  }
-  function loadUsers(){
-    Auth.users().then(function(r){
-      if(r.ok) renderUsers(r.body);
-      else $('usersHint').textContent = r.body.error || 'Could not load users.';
-    });
-  }
-  function userAct(body){
-    userError('');
-    return Auth.usersAction(body).then(function(r){
-      if(!r.ok){ userError(r.body.error || 'Failed'); return r; }
-      loadUsers();
-      return r;
-    });
   }
   function loadSecurity(){
     Auth.security().then(function(r){
@@ -3452,59 +3332,16 @@ button.chip:hover{filter:brightness(0.95);}
     });
   }
   function openSecurity(){
-    secError(''); userError(''); $('secPwError').hidden = true; $('secPwOk').hidden = true;
-    var owner = (Auth.me || {}).role === 'owner';
-    $('secOwnerOnly').hidden = !owner;
+    secError('');
     $('securityOverlay').hidden = false;
-    $('secMe').textContent = owner ? 'Loading…' : meLine();
-    if(owner){ loadSecurity(); loadUsers(); }
+    $('secMe').textContent = 'Loading…';
+    loadSecurity();
   }
   function closeSecurity(){ $('securityOverlay').hidden = true; }
   $('btnSecurity').addEventListener('click', openSecurity);
   $('btnSecurityMobile').addEventListener('click', openSecurity);
   $('secClose').addEventListener('click', closeSecurity);
   $('secSignOut').addEventListener('click', function(){ Auth.logout(); });
-  $('secPwForm').addEventListener('submit', function(e){
-    e.preventDefault();
-    var err = $('secPwError'), ok = $('secPwOk');
-    err.hidden = true; ok.hidden = true;
-    var bad = pwMismatch($('secPwNew').value, $('secPwNew2').value);
-    if(bad){ err.textContent = bad; err.hidden = false; return; }
-    Auth.changePassword($('secPwCur').value, $('secPwNew').value).then(function(r){
-      if(!r.ok){
-        err.textContent = (r.error || 'Could not change the password.') + (r.attemptsLeft > 0 ? ' (' + r.attemptsLeft + ' attempts left)' : '') +
-          (r.retryAfter ? ' Try again in ' + Math.ceil(r.retryAfter / 60) + ' min.' : '');
-        err.hidden = false; return;
-      }
-      $('secPwCur').value = ''; $('secPwNew').value = ''; $('secPwNew2').value = '';
-      ok.textContent = 'Password changed. Every other device has been signed out.';
-      ok.hidden = false;
-    });
-  });
-  $('userAddForm').addEventListener('submit', function(e){
-    e.preventDefault();
-    var email = $('uEmail').value.trim(), pw = $('uPass').value;
-    userAct({action:'create', email:email, password:pw}).then(function(r){
-      if(r && r.ok){ $('uEmail').value = ''; $('uPass').value = ''; }
-    });
-  });
-  $('usersList').addEventListener('click', function(e){
-    var t = e.target.closest ? e.target.closest('button') : null;
-    if(!t) return;
-    if(t.hasAttribute('data-user-toggle')){
-      var on = t.getAttribute('data-active') === '1';
-      if(on || confirm('Disable ' + t.getAttribute('data-user-toggle') + '? They are signed out immediately.')){
-        userAct({action:'update', email:t.getAttribute('data-user-toggle'), active:on});
-      }
-    } else if(t.hasAttribute('data-user-pw')){
-      var email = t.getAttribute('data-user-pw');
-      var pw = window.prompt('New password for ' + email + ' (12+ characters). They are signed out everywhere.');
-      if(pw) userAct({action:'setpassword', email:email, password:pw});
-    } else if(t.hasAttribute('data-user-del')){
-      var rm = t.getAttribute('data-user-del');
-      if(confirm('Remove ' + rm + ' permanently? Their login is deleted.')) userAct({action:'delete', email:rm});
-    }
-  });
   $('secBlockForm').addEventListener('submit', function(e){
     e.preventDefault();
     secAct({action:'block', kind:$('secKind').value, value:$('secValue').value.trim(), hours:$('secHours').value, reason:$('secReason').value.trim()});
@@ -3525,11 +3362,6 @@ button.chip:hover{filter:brightness(0.95);}
   renderAll();
 
   async function init(){
-    if(recoveryToken){ // came from a password-reset email: show the new-password form, don't load any data
-      $('authScreen').hidden = false;
-      showAuthMode('reset');
-      return;
-    }
     try{
       db = window.claude ? await window.claude.use('db') : null;
     } catch(err){ db = null; }
