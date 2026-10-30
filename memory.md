@@ -36,3 +36,4 @@ Single `index.html` (inline CSS + JS) + `supabase-adapter.js` (Firestore-like wr
 - 2026-10-21 — Dashboard **Expenses — <month>** tile (paid/unpaid split, follows month picker); Expenses filters moved right. Local branch `auth-hardening` only; live `main` doesn't have them yet.
 - 2026-10-28 — **Opening balance removed** (live main fcfd34a + local). Dashboard tiles are plain monthly sums; kept dashboard Expenses tile + Expenses filter position. Login work still only on local branch `auth-hardening`.
 - 2026-10-30 — **Password version for deploy**: single permanent site password (first-visit setup with `SETUP_CODE`), rate limiting + IP/device blocklist + Security panel; Supabase Auth/staff/email-reset removed. API 89/89.
+- 2026-10-30 — Eye (show/hide) button on all password boxes on the sign-in layer. Tests eye 17/17, password flow 35/35.

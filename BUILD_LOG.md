@@ -278,3 +278,10 @@ Request: ship the password security with rate limiting; ask for the password on 
 - Removed: Supabase Auth use, `OWNER_EMAIL`, `MAX_USERS`, staff accounts, forgot/change password, `api/users.js`, `scripts/setup-auth.js`, `app_users` table.
 - Env vars to set in Vercel: `SUPABASE_URL` (already there), `SUPABASE_SERVICE_ROLE_KEY`, `SETUP_CODE` (+ optional `CRON_SECRET`, `SESSION_HOURS`). `SUPABASE_ANON_KEY` is no longer used. Then run `schema.sql`.
 - Tests (simulated browser + mock database): API 89/89; UI suite in `pw_ui_test` (see end-of-session summary).
+
+## 2026-10-30 — Show/hide eye on the password boxes
+
+- Every password box on the sign-in layer (login password, setup code, new password, repeat password) has an eye button: click to show what you typed, click again to hide it. Focus returns to the box; the typed value is never touched; the button is `type=button` so it can't submit the form.
+- Boxes are hidden again whenever the screen switches between login and setup (including when the session expires and the screen comes back). A failed attempt clears the typed values but keeps your show/hide choice.
+- Accessible: `aria-pressed`, "Show password" / "Hide password" label and tooltip, keyboard focus ring.
+- Tests: eye 17/17; the full password flow suite 35/35 still passes; checked in real Chrome.
