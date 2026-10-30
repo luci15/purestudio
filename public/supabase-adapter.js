@@ -1,9 +1,10 @@
 /**
- * Pure Studio - Supabase Database & Realtime Sync Adapter
- * High-reliability adapter with offline fallback & URL sanitization
+ * Pure Studio - Database adapter + sign-in client
+ * All cloud reads/writes go through the app's own /api functions (session cookie,
+ * server-side rate limiting and IP/device blocklist); the browser never holds a
+ * database key. Optimistic local writes + offline retry queue are kept.
  */
 (function() {
-  var activeClient = null;
   var STORAGE_PREFIX = 'purestudio_db_';
   var listeners = {};
 
@@ -80,16 +81,6 @@
     });
   }
 
-  function cleanUrl(rawUrl) {
-    if (!rawUrl) return '';
-    var url = rawUrl.trim();
-    // Strip trailing slashes
-    url = url.replace(/\/+$/, '');
-    // Strip /rest/v1 if the user copied the REST endpoint instead of base URL
-    url = url.replace(/\/rest\/v1\/?$/i, '');
-    return url;
-  }
-
   function getLocalDocs(colName) {
     try {
       var raw = localStorage.getItem(STORAGE_PREFIX + colName);
@@ -103,17 +94,6 @@
     } catch (e) {}
   }
 
-  function getCredentials() {
-    var cfg = window.SUPABASE_CONFIG || {};
-    var url = (cfg.url && cfg.url.indexOf('your-project-id') === -1)
-      ? cfg.url
-      : (localStorage.getItem('purestudio_sb_url') || '');
-    var key = (cfg.anonKey && cfg.anonKey.indexOf('your-anon-key') === -1)
-      ? cfg.anonKey
-      : (localStorage.getItem('purestudio_sb_key') || '');
-    return { url: cleanUrl(url), key: (key || '').trim() };
-  }
-
   function updateSyncBadge(status) {
     var badge = document.getElementById('syncBadge');
     if (!badge) return;
@@ -122,6 +102,11 @@
       badge.style.color = 'var(--good)';
       badge.style.background = 'var(--good-tint)';
       badge.title = 'Connected to Supabase cloud database.';
+    } else if (status === 'error') {
+      badge.innerHTML = '🔴 Cloud unreachable';
+      badge.style.color = 'var(--bad)';
+      badge.style.background = 'var(--bad-tint)';
+      badge.title = 'Cannot reach the database (is the Supabase project paused?). Showing the last local copy; changes are kept locally and retried.';
     } else {
       badge.innerHTML = '🟡 Local Storage';
       badge.style.color = 'var(--ink-muted)';
@@ -142,14 +127,8 @@
     };
   }
 
-  function createSupabaseDb(url, anonKey) {
-    if (!window.supabase || !window.supabase.createClient) {
-      console.warn('Supabase JS library not loaded yet.');
-      return null;
-    }
-
-    var client = window.supabase.createClient(cleanUrl(url), anonKey);
-    activeClient = client;
+  function createGatewayDb() {
+    var client = createGatewayClient();
 
     return {
       collection: function(colName) {
@@ -170,7 +149,8 @@
             function fetchAll() {
               client.from(colName).select('*').then(function(res) {
                 if (res.error) {
-                  console.warn('Supabase query note (' + colName + '):', res.error.message);
+                  console.warn('Cloud query note (' + colName + '):', res.error.message);
+                  if (res.error.status !== 401 && res.error.status !== 403) updateSyncBadge('error');
                   if (onError) onError(res.error);
                 } else if (res.data) {
                   var cloudDocs = res.data.map(function(row) {
@@ -187,19 +167,25 @@
                   Object.keys(pw).forEach(function(id) {
                     if (!cloudIds[id] && !pd[id]) cloudDocs.push(Object.assign({}, pw[id], { id: id }));
                   });
-                  saveLocalDocs(colName, cloudDocs);
-                  notifyLocal(colName);
+                  // Skip no-op polls so the UI isn't re-rendered every 30s for nothing
+                  var changed = firstFetch || JSON.stringify(cloudDocs) !== JSON.stringify(getLocalDocs(colName));
+                  firstFetch = false;
+                  if (changed) {
+                    saveLocalDocs(colName, cloudDocs);
+                    notifyLocal(colName);
+                  }
                   updateSyncBadge('cloud');
                   flushPending(client, colName);
                 }
               }).catch(function(err) {
-                console.warn('Supabase fetch exception:', err);
+                console.warn('Cloud fetch exception:', err);
                 if (onError) onError(err);
               });
             }
+            var firstFetch = true;
             fetchAll();
 
-            // 3. Realtime subscription
+            // 3. Poll for changes made from other devices
             var channel = null;
             try {
               channel = client.channel('public:' + colName)
@@ -414,6 +400,7 @@
               try { onNext({ exists: true, id: docId, data: function() { return cachedRaw; } }); } catch(e) {}
             }
 
+            var lastDocSig = null;
             function fetchDoc() {
               client.from(colName).select('*').eq('id', docId).maybeSingle().then(function(res) {
                 if (res.data) {
@@ -423,6 +410,9 @@
                   var pd = getPending('delete', listenerKey);
                   if (pd[docId]) return;
                   var finalData = pw[docId] ? pw[docId] : raw;
+                  var sig = JSON.stringify(finalData);
+                  if (sig === lastDocSig) return; // unchanged since last emit — skip the re-render
+                  lastDocSig = sig;
                   try { localStorage.setItem(STORAGE_PREFIX + docPath, JSON.stringify(Object.assign({}, finalData, { id: docId }))); } catch(e) {}
                   onNext({
                     exists: true,
@@ -455,61 +445,182 @@
     };
   }
 
-  async function fetchVercelConfig() {
+
+  // ---------- Sign-in client + device identity ----------
+  var POLL_MS = 30000;
+  var memoryDeviceId = null;
+  var pendingLoginResolve = null;
+  var authEventSent = false;
+
+  function randomId() {
     try {
-      var res = await fetch('/api/config');
-      if (res.ok) {
-        var data = await res.json();
-        if (data && data.url && data.anonKey) {
-          return { url: cleanUrl(data.url), key: (data.anonKey || '').trim() };
-        }
-      }
-    } catch(e) {}
-    return null;
+      if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '') + Math.random().toString(36).slice(2, 10);
+      var a = new Uint8Array(24);
+      crypto.getRandomValues(a);
+      return Array.prototype.map.call(a, function(b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    } catch (e) {
+      return (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0, 40);
+    }
+  }
+  // Stable per-browser id sent with every request so the server can rate-limit / block a device.
+  function deviceId() {
+    try {
+      var id = localStorage.getItem('purestudio_device_id');
+      if (!id || id.length < 16) { id = randomId(); localStorage.setItem('purestudio_device_id', id); }
+      return id;
+    } catch (e) {
+      if (!memoryDeviceId) memoryDeviceId = randomId();
+      return memoryDeviceId;
+    }
+  }
+  function isLocalHost() {
+    return location.protocol === 'file:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
   }
 
-  // Global helper to initialize or get DB
-  window.getPureStudioDb = async function() {
-    var creds = getCredentials();
-    if (!creds.url || !creds.key) {
-      var vercelCreds = await fetchVercelConfig();
-      if (vercelCreds) creds = vercelCreds;
-    }
-    if (creds.url && creds.key) {
-      try {
-        var db = createSupabaseDb(creds.url, creds.key);
-        if (db) {
-          console.log('%c[Pure Studio] Connected to Supabase: ' + creds.url, 'color:#2F7D4F;font-weight:bold;');
-          updateSyncBadge('cloud');
-          return db;
-        }
-      } catch (err) {
-        console.error('Supabase connection error:', err);
+  function apiFetch(path, body, method) {
+    return fetch(path, {
+      method: method || 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId() },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    }).then(function(r) {
+      return r.json().catch(function() { return {}; }).then(function(j) {
+        return { status: r.status, ok: r.ok, body: j || {} };
+      });
+    });
+  }
+
+  function requireLogin(message) {
+    if (authEventSent) return;
+    authEventSent = true;
+    window.dispatchEvent(new CustomEvent('purestudio:auth-required', { detail: { configured: true, setup: false, message: message || '' } }));
+  }
+
+  function fetchSession() {
+    return apiFetch('/api/auth?action=session', undefined, 'GET').then(function(r) {
+      if (r.status === 404 && isLocalHost()) return { status: 'noapi' };
+      if (!r.ok) return { status: 'error', message: r.body.error || ('Server error (' + r.status + ')') };
+      return { status: 'ok', configured: r.body.configured !== false, passwordSet: r.body.passwordSet !== false, authenticated: !!r.body.authenticated };
+    }).catch(function() {
+      return isLocalHost() ? { status: 'noapi' } : { status: 'error', message: 'Cannot reach the server. Check your connection and reload.' };
+    });
+  }
+
+  // login and first-time setup share the same ending: resume start-up, or reload if the session had expired mid-use
+  function authCall(action, body) {
+    return apiFetch('/api/auth?action=' + action, body).then(function(r) {
+      if (r.ok) {
+        authEventSent = false;
+        if (pendingLoginResolve) { var f = pendingLoginResolve; pendingLoginResolve = null; f(); }
+        else location.reload();
+        return { ok: true };
       }
-    }
-    updateSyncBadge('local');
-    return null;
+      return { ok: false, error: r.body.error || 'Something went wrong', retryAfter: r.body.retryAfter || 0, attemptsLeft: r.body.attemptsLeft,
+        configured: r.body.configured, passwordSet: r.body.passwordSet, needsSetupCode: !!r.body.needsSetupCode };
+    }).catch(function() { return { ok: false, error: 'Cannot reach the server. Check your connection.' }; });
+  }
+
+  window.PureStudioAuth = {
+    deviceId: deviceId,
+    session: fetchSession,
+    login: function(password) { return authCall('login', { password: password }); },
+    setup: function(code, password) { return authCall('setup', { code: code, password: password }); },
+    logout: function() {
+      var done = function() {
+        try {
+          Object.keys(localStorage).forEach(function(k) { if (k.indexOf(STORAGE_PREFIX) === 0) localStorage.removeItem(k); });
+        } catch (e) {}
+        location.reload();
+      };
+      return apiFetch('/api/auth?action=logout').then(done, done);
+    },
+    defaults: function() { return apiFetch('/api/db', { op: 'defaults' }); },
+    security: function() { return apiFetch('/api/security', undefined, 'GET'); },
+    securityAction: function(body) { return apiFetch('/api/security', body); }
   };
 
-  // Clean any bad URL that might have been saved in localStorage earlier
-  try {
-    var savedUrl = localStorage.getItem('purestudio_sb_url');
-    if (savedUrl) {
-      var fixedUrl = cleanUrl(savedUrl);
-      if (fixedUrl !== savedUrl) {
-        localStorage.setItem('purestudio_sb_url', fixedUrl);
-      }
-    }
-  } catch(e) {}
-
-  // Update initial badge
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-      var creds = getCredentials();
-      updateSyncBadge((creds.url && creds.key) ? 'cloud' : 'local');
+  function waitForLogin(session) {
+    return new Promise(function(resolve) {
+      pendingLoginResolve = resolve;
+      authEventSent = true;
+      window.dispatchEvent(new CustomEvent('purestudio:auth-required', {
+        detail: { configured: session.configured !== false, setup: session.status === 'ok' && session.passwordSet === false, message: session.status === 'error' ? session.message : '' }
+      }));
     });
-  } else {
-    var creds = getCredentials();
-    updateSyncBadge((creds.url && creds.key) ? 'cloud' : 'local');
   }
+
+  // ---------- Gateway client: the small supabase-js-shaped surface the adapter above uses ----------
+  function gw(body) {
+    return apiFetch('/api/db', body).then(function(r) {
+      if (r.status === 401 || r.status === 403) {
+        requireLogin(r.status === 403 ? 'Access denied.' : 'Your session ended. Please sign in again.');
+      }
+      if (!r.ok) return { data: null, error: { message: r.body.error || ('HTTP ' + r.status), status: r.status } };
+      return { data: r.body, error: null };
+    }).catch(function(e) {
+      return { data: null, error: { message: (e && e.message) || 'network error' } };
+    });
+  }
+
+  function createGatewayClient() {
+    return {
+      from: function(table) {
+        return {
+          select: function() {
+            var filterId = null;
+            function run() {
+              if (filterId === null) {
+                return gw({ op: 'select', table: table }).then(function(r) { return r.error ? r : { data: r.data.rows, error: null }; });
+              }
+              return gw({ op: 'get', table: table, id: filterId }).then(function(r) { return r.error ? r : { data: r.data.row, error: null }; });
+            }
+            var q = {
+              eq: function(col, val) { filterId = val; return q; },
+              maybeSingle: function() { return q; },
+              then: function(a, b) { return run().then(a, b); },
+              catch: function(b) { return run().catch(b); }
+            };
+            return q;
+          },
+          upsert: function(row) {
+            return gw({ op: 'upsert', table: table, id: row.id, data: row.data }).then(function(r) { return { data: null, error: r.error }; });
+          },
+          delete: function() {
+            return {
+              eq: function(col, val) {
+                return gw({ op: 'delete', table: table, id: val }).then(function(r) { return { data: null, error: r.error }; });
+              }
+            };
+          }
+        };
+      },
+      // No realtime socket: "subscribe" polls so other devices' changes show up within ~30s.
+      channel: function() {
+        var cbs = [];
+        var ch = {
+          on: function() { cbs.push(arguments[arguments.length - 1]); return ch; },
+          subscribe: function() {
+            ch._timer = setInterval(function() {
+              if (document.hidden) return;
+              cbs.forEach(function(cb) { try { cb(); } catch (e) {} });
+            }, POLL_MS);
+            return ch;
+          }
+        };
+        return ch;
+      },
+      removeChannel: function(ch) { if (ch && ch._timer) clearInterval(ch._timer); }
+    };
+  }
+
+  // Global helper: resolves to a cloud-backed db once signed in, or null for local-only mode
+  // (no /api available, e.g. a plain static dev server on localhost).
+  window.getPureStudioDb = async function() {
+    var s = await fetchSession();
+    if (s.status === 'noapi') { updateSyncBadge('local'); return null; }
+    if (!(s.status === 'ok' && s.configured && s.authenticated)) await waitForLogin(s);
+    updateSyncBadge('cloud');
+    console.log('%c[Pure Studio] Signed in - cloud sync active', 'color:#2F7D4F;font-weight:bold;');
+    return createGatewayDb();
+  };
 })();

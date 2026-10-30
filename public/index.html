@@ -6,8 +6,6 @@
 <title>Pure Studio</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
 <script src="supabase-adapter.js"></script>
 <style>
 :root{
@@ -808,6 +806,28 @@ button.chip{border:none;cursor:pointer;font-family:inherit;}
 button.chip:hover{filter:brightness(0.95);}
 .exp-sub{font-size:12px;color:var(--ink-faint);font-weight:400;margin-top:2px;}
 
+/* Sign-in screen + security panel */
+.auth-screen{position:fixed;inset:0;z-index:300;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;}
+.auth-screen[hidden]{display:none;}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:30px 28px;width:100%;max-width:380px;box-shadow:0 20px 60px var(--shadow);}
+.auth-card .auth-brand{font-family:"Fraunces",serif;font-style:italic;font-weight:500;font-size:26px;margin-bottom:2px;}
+.auth-card .auth-sub{font-size:12.5px;color:var(--ink-muted);margin-bottom:22px;}
+.auth-msg{font-size:13px;color:var(--ink-muted);}
+.auth-ok{font-size:13px;color:var(--good);background:var(--good-tint);border-radius:8px;padding:9px 12px;margin-bottom:14px;}
+.auth-ok[hidden]{display:none;}
+.auth-link{background:none;border:none;color:var(--accent);font-family:inherit;font-size:12.5px;cursor:pointer;padding:10px 0 0;text-decoration:underline;display:block;margin:0 auto;}
+.auth-card h3{font-size:15px;margin-bottom:4px;}
+.auth-card .hint-line{margin:0 0 14px;}
+.auth-error{font-size:13px;color:var(--bad);background:var(--bad-tint);border-radius:8px;padding:9px 12px;margin-bottom:14px;}
+.auth-error[hidden]{display:none;}
+.auth-card .btn.primary{width:100%;justify-content:center;margin-top:4px;}
+.auth-card .btn[disabled]{opacity:.55;cursor:not-allowed;}
+.sec-table{font-size:12.5px;}
+.sec-table td, .sec-table th{padding:7px 8px;vertical-align:top;}
+.sec-mono{font-family:"IBM Plex Mono",monospace;font-size:11.5px;word-break:break-all;}
+.sec-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:6px;}
+.sec-empty{font-size:12.5px;color:var(--ink-faint);padding:10px 2px;}
+
 </style>
 
 <div class="app">
@@ -845,15 +865,24 @@ button.chip:hover{filter:brightness(0.95);}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg>
         Business &amp; bank details
       </button>
+      <button class="footer-link" id="btnSecurity" hidden>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg>
+        Security &amp; sign out
+      </button>
       <div id="syncBadge" style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:4px 8px;border-radius:6px;background:var(--surface-2);color:var(--ink-muted);margin-top:6px;">🟡 Local Storage</div>
     </div>
   </aside>
 
   <header class="mobile-topbar">
     <span class="name">Pure Studio</span>
-    <button class="icon-btn" id="btnSettingsMobile" aria-label="Business &amp; bank details">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg>
-    </button>
+    <span style="display:inline-flex;gap:2px;">
+      <button class="icon-btn" id="btnSecurityMobile" aria-label="Security &amp; sign out" hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg>
+      </button>
+      <button class="icon-btn" id="btnSettingsMobile" aria-label="Business &amp; bank details">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </span>
   </header>
 
   <main class="main">
@@ -1310,6 +1339,60 @@ button.chip:hover{filter:brightness(0.95);}
   </div>
 </div>
 
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <div class="auth-brand">Pure Studio</div>
+    <div class="auth-sub">Client &amp; Revenue Ledger</div>
+    <div class="auth-msg" id="authChecking">Checking session…</div>
+    <div class="auth-error" id="authError" role="alert" hidden></div>
+    <form id="authForm" autocomplete="on" hidden>
+      <div class="field"><label for="authPass">Password</label><input type="password" id="authPass" name="password" autocomplete="current-password" required></div>
+      <button type="submit" class="btn primary" id="authSubmit">Unlock</button>
+    </form>
+    <form id="authSetupForm" autocomplete="off" hidden>
+      <h3>Create your password</h3>
+      <div class="hint-line">First time here. Choose the password for this site — it stays permanent. Use 12 or more characters. The setup code is the SETUP_CODE you added in Vercel.</div>
+      <div class="field"><label for="authCode">Setup code</label><input type="password" id="authCode" autocomplete="off" required></div>
+      <div class="field"><label for="authNewPass">New password</label><input type="password" id="authNewPass" autocomplete="new-password" minlength="12" required></div>
+      <div class="field"><label for="authNewPass2">Repeat password</label><input type="password" id="authNewPass2" autocomplete="new-password" minlength="12" required></div>
+      <button type="submit" class="btn primary" id="authSetupSubmit">Set password</button>
+    </form>
+  </div>
+</div>
+
+<div class="overlay" id="securityOverlay" hidden>
+  <div class="modal wide">
+    <h2>Security</h2>
+    <div class="modal-sub" id="secMe">Loading…</div>
+
+    <div class="section-label">Block an IP or device</div>
+    <form id="secBlockForm">
+      <div class="field-row three">
+        <div class="field"><label for="secKind">Type</label><select id="secKind"><option value="ip">IP address</option><option value="device">Device id</option></select></div>
+        <div class="field" style="grid-column:span 2;"><label for="secValue">IP address / device id</label><input type="text" id="secValue" required></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label for="secHours">Hours (blank = until removed)</label><input type="number" id="secHours" min="1" step="1"></div>
+        <div class="field"><label for="secReason">Reason</label><input type="text" id="secReason" maxlength="120"></div>
+      </div>
+      <div class="auth-error" id="secError" hidden></div>
+      <button type="submit" class="btn small">Block</button>
+    </form>
+
+    <div class="section-label">Blocked</div>
+    <div id="secBlocked"></div>
+
+    <div class="section-label">Recent sign-in attempts</div>
+    <div class="hint-line">5 wrong passwords from one IP or device in 15 minutes locks it for 15 minutes; 20 in 24 hours blocks it for 24 hours.</div>
+    <div id="secAttempts"></div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn danger" id="secSignOut">Sign out</button>
+      <button type="button" class="btn ghost" id="secClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
 
@@ -1538,24 +1621,26 @@ button.chip:hover{filter:brightness(0.95);}
     };
   }
 
+  // Business details (address, GSTIN, bank/UPI, terms) are NOT in this public file — signed-in users receive
+  // them from the server (/api/db op "defaults") and Settings overrides them.
   var DEFAULT_BUSINESS = {
     name: 'The Pure Studio',
-    regdAddress: '601, Dwarka bldg., Sainath Nagar, L.B.S. Marg, Ghatkopar West, Mumbai-400086',
-    officeAddress: 'G-41, Ground Floor, Sai Dham Shopping Plaza, Sarvoday Nagar, Mulund West, Mumbai-400080',
-    email: 'info.thepurestudio@gmail.com',
-    phone: '9930914406',
+    regdAddress: '',
+    officeAddress: '',
+    email: '',
+    phone: '',
     website: '',
-    gstin: '27ERWPS0075L1ZU',
+    gstin: '',
     jurisdiction: 'Mumbai',
     cgstPct: 9,
     sgstPct: 9,
-    bankAccountName: 'THE PURE STUDIO',
-    bankAccountNo: '0365073000001224',
-    bankName: 'The South Indian Bank Ltd',
-    bankBranch: 'Ghatkopar West',
-    bankIfsc: 'SIBL0000365',
-    upiHandle: 'dhrumil6115-1@okicici',
-    terms: 'Payment requested by crossed PAYEES A/C. cheque / NEFT/RTGS only.\nOur responsibility ceases on delivery of the final files.\nInterest of 24% per annum will be charged on Bills remaining unpaid one week after invoice date.',
+    bankAccountName: '',
+    bankAccountNo: '',
+    bankName: '',
+    bankBranch: '',
+    bankIfsc: '',
+    upiHandle: '',
+    terms: '',
     invoiceStartNumber: 1,
     cashStartNumber: 1
   };
@@ -3120,6 +3205,160 @@ button.chip:hover{filter:brightness(0.95);}
     if(del){ deleteExpense(del.getAttribute('data-del-expense')); return; }
   });
 
+  // ---------- Password screen + security panel ----------
+  var Auth = window.PureStudioAuth;
+  var cloudMode = false;
+  var lockTimer = null;
+
+  function setAuthError(msg){
+    var el = $('authError');
+    el.textContent = msg || '';
+    el.hidden = !msg;
+  }
+  function showAuthMode(mode){ // 'login' | 'setup'
+    $('authChecking').hidden = true;
+    $('authForm').hidden = mode !== 'login';
+    $('authSetupForm').hidden = mode !== 'setup';
+    setTimeout(function(){ $(mode === 'setup' ? 'authCode' : 'authPass').focus(); }, 0);
+  }
+  function showAuthForm(detail){
+    detail = detail || {};
+    $('authScreen').hidden = false;
+    if(detail.configured === false){
+      $('authForm').hidden = true;
+      $('authSetupForm').hidden = true;
+      $('authChecking').hidden = false;
+      $('authChecking').textContent = 'Server login is not set up yet. Add SUPABASE_SERVICE_ROLE_KEY and SETUP_CODE in Vercel (see README), then redeploy.';
+      return;
+    }
+    showAuthMode(detail.setup ? 'setup' : 'login');
+    setAuthError(detail.message || '');
+  }
+  window.addEventListener('purestudio:auth-required', function(e){ showAuthForm(e.detail); });
+
+  function startLockCountdown(btn, label, sec){
+    var end = Date.now() + sec * 1000;
+    clearInterval(lockTimer);
+    function tick(){
+      var left = Math.ceil((end - Date.now()) / 1000);
+      if(left <= 0){
+        clearInterval(lockTimer);
+        btn.disabled = false; btn.textContent = label; setAuthError('');
+        return;
+      }
+      btn.textContent = 'Locked — try again in ' + Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2);
+    }
+    btn.disabled = true; tick();
+    lockTimer = setInterval(tick, 1000);
+  }
+  // Shows what the server said; if it says the password state changed (set up elsewhere / not set yet) switch screens.
+  function handleAuthFailure(r, btn, label){
+    $('authPass').value = ''; $('authNewPass').value = ''; $('authNewPass2').value = '';
+    if(r.passwordSet === false){ showAuthMode('setup'); setAuthError(''); btn.disabled = false; return; }
+    if(r.passwordSet === true){ showAuthMode('login'); setAuthError(r.error); btn.disabled = false; return; }
+    var msg = r.error;
+    if(r.attemptsLeft > 0) msg += ' (' + r.attemptsLeft + ' attempt' + (r.attemptsLeft === 1 ? '' : 's') + ' left)';
+    setAuthError(msg);
+    if(r.retryAfter) startLockCountdown(btn, label, r.retryAfter); else btn.disabled = false;
+  }
+  $('authForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var btn = $('authSubmit');
+    btn.disabled = true; setAuthError('');
+    Auth.login($('authPass').value).then(function(r){
+      if(r.ok) return; // adapter resumes start-up (or reloads if the session expired mid-use)
+      handleAuthFailure(r, btn, 'Unlock');
+    });
+  });
+  $('authSetupForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var p1 = $('authNewPass').value, p2 = $('authNewPass2').value;
+    if(p1.length < 12){ setAuthError('Use at least 12 characters.'); return; }
+    if(p1 !== p2){ setAuthError('The two passwords do not match.'); return; }
+    var btn = $('authSetupSubmit');
+    btn.disabled = true; setAuthError('');
+    Auth.setup($('authCode').value, p1).then(function(r){
+      if(r.ok) return;
+      $('authCode').value = '';
+      handleAuthFailure(r, btn, 'Set password');
+    });
+  });
+
+  function fmtDateTime(iso){
+    var d = new Date(iso);
+    return isNaN(d) ? '' : d.toLocaleString('en-GB', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+  }
+  function secError(msg){
+    var el = $('secError');
+    el.textContent = msg || '';
+    el.hidden = !msg;
+  }
+  function renderSecurity(d){
+    $('secMe').innerHTML = 'You are on IP <span class="sec-mono">' + esc(d.me.ip) + '</span> · device <span class="sec-mono">' + esc(d.me.deviceId.slice(0, 8)) + '…</span>';
+    var now = Date.now();
+    var blocked = (d.blocked || []).filter(function(b){ return !b.expires_at || new Date(b.expires_at).getTime() > now; });
+    $('secBlocked').innerHTML = blocked.length ? (
+      '<div class="sec-scroll"><table class="sec-table"><thead><tr><th>Type</th><th>Value</th><th>Reason</th><th>Until</th><th></th></tr></thead><tbody>' +
+      blocked.map(function(b){
+        return '<tr><td>' + esc(b.kind) + (b.source === 'auto' ? ' <span class="chip pending">auto</span>' : '') + '</td>' +
+          '<td class="sec-mono">' + esc(b.value) + '</td><td>' + esc(b.reason || '') + '</td>' +
+          '<td>' + (b.expires_at ? esc(fmtDateTime(b.expires_at)) : 'Until removed') + '</td>' +
+          '<td><button class="btn small" data-sec-unblock="' + esc(b.id) + '">Unblock</button></td></tr>';
+      }).join('') + '</tbody></table></div>'
+    ) : '<div class="sec-empty">Nothing blocked.</div>';
+    var attempts = d.attempts || [];
+    $('secAttempts').innerHTML = attempts.length ? (
+      '<div class="sec-scroll"><table class="sec-table"><thead><tr><th>When</th><th>Result</th><th>Action</th><th>IP</th><th>Device</th></tr></thead><tbody>' +
+      attempts.map(function(a){
+        return '<tr title="' + esc(a.user_agent || '') + '"><td>' + esc(fmtDateTime(a.created_at)) + '</td>' +
+          '<td><span class="chip ' + (a.success ? 'paid' : 'overdue') + '">' + (a.success ? 'OK' : 'Failed') + '</span></td>' +
+          '<td>' + esc(a.username || '') + '</td>' +
+          '<td><span class="sec-mono">' + esc(a.ip) + '</span> <button class="btn small ghost" data-sec-block="ip" data-value="' + esc(a.ip) + '">Block</button></td>' +
+          '<td>' + (a.device_id ? '<span class="sec-mono">' + esc(a.device_id.slice(0, 8)) + '…</span> <button class="btn small ghost" data-sec-block="device" data-value="' + esc(a.device_id) + '">Block</button>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+    ) : '<div class="sec-empty">No attempts logged yet.</div>';
+  }
+  function loadSecurity(){
+    Auth.security().then(function(r){
+      if(!r.ok){ $('secMe').textContent = r.body.error || 'Could not load security info.'; return; }
+      renderSecurity(r.body);
+    });
+  }
+  function secAct(body){
+    secError('');
+    Auth.securityAction(body).then(function(r){
+      if(!r.ok){ secError(r.body.error || 'Failed'); return; }
+      loadSecurity();
+    });
+  }
+  function openSecurity(){
+    secError('');
+    $('securityOverlay').hidden = false;
+    $('secMe').textContent = 'Loading…';
+    loadSecurity();
+  }
+  function closeSecurity(){ $('securityOverlay').hidden = true; }
+  $('btnSecurity').addEventListener('click', openSecurity);
+  $('btnSecurityMobile').addEventListener('click', openSecurity);
+  $('secClose').addEventListener('click', closeSecurity);
+  $('secSignOut').addEventListener('click', function(){ Auth.logout(); });
+  $('secBlockForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    secAct({action:'block', kind:$('secKind').value, value:$('secValue').value.trim(), hours:$('secHours').value, reason:$('secReason').value.trim()});
+    $('secValue').value = ''; $('secReason').value = ''; $('secHours').value = '';
+  });
+  $('securityOverlay').addEventListener('click', function(e){
+    var t = e.target.closest ? e.target.closest('button') : null;
+    if(!t) return;
+    if(t.hasAttribute('data-sec-unblock')) secAct({action:'unblock', id:t.getAttribute('data-sec-unblock')});
+    else if(t.hasAttribute('data-sec-block')){
+      if(confirm('Block this ' + t.getAttribute('data-sec-block') + '?\n' + t.getAttribute('data-value'))){
+        secAct({action:'block', kind:t.getAttribute('data-sec-block'), value:t.getAttribute('data-value'), reason:'Blocked from attempt log'});
+      }
+    }
+  });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeSecurity(); });
+
   renderAll();
 
   async function init(){
@@ -3129,10 +3368,18 @@ button.chip:hover{filter:brightness(0.95);}
     try{
       downloadsCap = window.claude ? await window.claude.use('downloads') : null;
     } catch(err){ downloadsCap = null; }
-    
+
     if(!db){
-      db = (typeof window.getPureStudioDb === 'function' && (await window.getPureStudioDb())) || createLocalDb();
+      var cloudDb = (typeof window.getPureStudioDb === 'function') ? await window.getPureStudioDb() : null;
+      if(cloudDb){ db = cloudDb; cloudMode = true; } else { db = createLocalDb(); }
     }
+    if(cloudMode){ // keep the sign-in layer up until the business details are in, so Settings can't be opened (and saved) blank
+      var dflt = await Auth.defaults();
+      if(dflt.ok && dflt.body.business){ Object.assign(DEFAULT_BUSINESS, dflt.body.business); business = Object.assign({}, DEFAULT_BUSINESS); }
+    }
+    $('authScreen').hidden = true;
+    $('btnSecurity').hidden = !cloudMode;
+    $('btnSecurityMobile').hidden = !cloudMode;
     if($('dbBanner')){
       $('dbBanner').className = 'banner';
     }
