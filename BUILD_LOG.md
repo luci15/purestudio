@@ -285,3 +285,17 @@ Request: ship the password security with rate limiting; ask for the password on 
 - Boxes are hidden again whenever the screen switches between login and setup (including when the session expires and the screen comes back). A failed attempt clears the typed values but keeps your show/hide choice.
 - Accessible: `aria-pressed`, "Show password" / "Hide password" label and tooltip, keyboard focus ring.
 - Tests: eye 17/17; the full password flow suite 35/35 still passes; checked in real Chrome.
+
+## 2026-11-02 — Invoices: download a whole month as one PDF
+
+- Invoices page has a **Download month PDF** button. It opens a popup with a month dropdown (every month that has invoices, plus the current month, each with its invoice count), a summary line (count · total · month), and a scrollable preview of every invoice for that month, oldest first.
+- **Download PDF** builds one A4 PDF, one invoice per page, named `Invoices-YYYY-MM.pdf`; the button shows build progress (n/total). Disabled for empty months.
+- Code: `openPreview` split into `buildInvoiceSheetHtml(inv)` (shared by single preview and the month PDF); new `monthInvoices`, `buildMonthPdf` use the existing html2pdf bundle. GST invoices only (cash receipts not included).
+- Tests (Chrome via Playwright, local mode): dropdown options/counts, preview pages, month switch, 3-invoice download → 3-page PDF, single preview still works, no leftover render node, no JS errors.
+- Local run: `.claude/launch.json` now serves `public/` (`python -m http.server 5173 --directory public`).
+
+## 2026-11-02 — Dashboard: "GST to pay" tile
+
+- New tile **GST to pay — <month>** after Expenses: sum of CGST + SGST + IGST across every invoice dated in the selected month, with the CGST / SGST / IGST split underneath. Follows the Month picker.
+- Uses `computeTotals(inv)` per invoice, so interstate (IGST) and in-state (CGST+SGST) are each counted correctly. Cash entries carry no GST and are excluded. Not net of input credit (not requested).
+- Tests (Chrome, local mode): Nov → ₹1,350 (450/450/450), Oct → ₹162 (81/81/0), switches with the picker, no JS errors.

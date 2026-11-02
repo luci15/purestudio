@@ -232,6 +232,11 @@ td.num, th.num{text-align:right;}
 .bottom-nav{display:none;}
 
 .preview-modal{max-width:780px;padding:22px;}
+.month-pdf-preview{max-height:62vh;overflow:auto;background:#e9e4d9;border-radius:8px;padding:12px;}
+.month-pdf-preview .mp-page{zoom:.6;margin:0 auto 14px;width:210mm;}
+.month-pdf-preview .mp-page .exact-invoice-paper{margin:0 auto;}
+.month-pdf-preview .mp-empty{padding:30px 10px;text-align:center;color:#6b6356;}
+#monthPdfRender{position:absolute;left:-99999px;top:0;width:210mm;}
 .preview-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap;}
 .preview-toolbar h2{font-size:16px;}
 .invoice-sheet{background:transparent !important;color:#1c1a17;border:none !important;border-radius:0 !important;padding:0 !important;font-size:12.5px;line-height:1.5;box-shadow:none !important;}
@@ -980,6 +985,7 @@ button.chip:hover{filter:brightness(0.95);}
           <div class="desc">Every invoice you've issued.</div>
         </div>
         <div class="actions">
+          <button class="btn" id="btnMonthPdf">Download month PDF</button>
           <button class="btn primary" id="btnNewInvoice">+ New invoice</button>
         </div>
       </div>
@@ -1285,6 +1291,21 @@ button.chip:hover{filter:brightness(0.95);}
       </div>
     </div>
     <div id="invoiceSheet" class="invoice-sheet"></div>
+  </div>
+</div>
+
+<div class="overlay" id="monthPdfOverlay" hidden>
+  <div class="modal preview-modal">
+    <div class="preview-toolbar no-print">
+      <h2>Monthly invoices PDF</h2>
+      <div class="actions">
+        <select class="select" id="monthPdfSelect" aria-label="Month"></select>
+        <button class="btn ghost small" id="monthPdfClose">Close</button>
+        <button class="btn primary small" id="monthPdfDownload">Download PDF</button>
+      </div>
+    </div>
+    <div class="desc" id="monthPdfSummary" style="margin:8px 0 12px;"></div>
+    <div id="monthPdfPreview" class="month-pdf-preview"></div>
   </div>
 </div>
 
@@ -1889,11 +1910,19 @@ button.chip:hover{filter:brightness(0.95);}
       if(x.status === 'paid') expPaid += amt; else expUnpaid += amt;
     });
 
+    var gstCgst = 0, gstSgst = 0, gstIgst = 0;
+    monthInvoices.forEach(function(inv){
+      var t = computeTotals(inv);
+      gstCgst += t.cgstAmt; gstSgst += t.sgstAmt; gstIgst += t.igstAmt;
+    });
+    var gstDue = gstCgst + gstSgst + gstIgst;
+
     var kpis = [
       {label:'GST Billing — ' + fmtMonth(selectedMonth), value: money(billingRevenue), mono:true, hint: monthInvoices.length + ' invoice' + (monthInvoices.length===1?'':'s')},
       {label:'Cash Dealings — ' + fmtMonth(selectedMonth), value: money(cashRevenue), mono:true, hint: monthCash.length + ' entr' + (monthCash.length===1?'y':'ies')},
       {label:'Combined Total — ' + fmtMonth(selectedMonth), value: money(combined), mono:true, hint: 'Billing + Cash'},
       {label:'Expenses — ' + fmtMonth(selectedMonth), value: money(expTotal), mono:true, hint: monthExp.length ? (money(expPaid) + ' paid · ' + money(expUnpaid) + ' unpaid') : 'No expenses this month'},
+      {label:'GST to pay — ' + fmtMonth(selectedMonth), value: money(gstDue), mono:true, hint: monthInvoices.length ? ('CGST ' + money(gstCgst) + ' · SGST ' + money(gstSgst) + ' · IGST ' + money(gstIgst)) : 'No invoices this month'},
       {label:'Top client this month', value: topClient ? topClient.name : '—', hint: topClient ? money(topAmt) + ' in sales' : 'No invoices yet'},
       {label:'Total clients', value: String(clients.length)}
     ];
@@ -2662,6 +2691,10 @@ button.chip:hover{filter:brightness(0.95);}
     if(!inv) return;
     previewRecordId = id;
     previewKind = 'invoice';
+    $('invoiceSheet').innerHTML = buildInvoiceSheetHtml(inv);
+    $('previewOverlay').hidden = false;
+  }
+  function buildInvoiceSheetHtml(inv){
     var c = clientById(inv.clientId) || {name: inv.clientName || 'Client'};
     var t = computeTotals(inv);
     var termsLines = (business.terms||'').split(/\r?\n/).filter(Boolean);
@@ -2801,8 +2834,7 @@ button.chip:hover{filter:brightness(0.95);}
         '</div>' +
       '</div>';
 
-    $('invoiceSheet').innerHTML = htmlContent;
-    $('previewOverlay').hidden = false;
+    return htmlContent;
   }
 
   function openCashPreview(id){
@@ -2960,6 +2992,87 @@ button.chip:hover{filter:brightness(0.95);}
       throw err;
     });
   }
+  // ---- Monthly invoices -> one PDF ----
+  function monthInvoices(ym){
+    return invoices.filter(function(i){ return (i.date||'').slice(0,7) === ym; })
+      .sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || String(a.number||'').localeCompare(String(b.number||''), undefined, {numeric:true}); });
+  }
+  function fillMonthPdfSelect(){
+    var sel = $('monthPdfSelect'), keep = sel.value;
+    var set = {};
+    invoices.forEach(function(i){ if(i.date) set[i.date.slice(0,7)] = 1; });
+    var now = new Date(), cur = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+    set[cur] = 1;
+    var list = Object.keys(set).sort().reverse();
+    sel.innerHTML = list.map(function(m){ return '<option value="'+m+'">'+esc(fmtMonth(m))+' ('+monthInvoices(m).length+')</option>'; }).join('');
+    sel.value = (keep && set[keep]) ? keep : cur;
+  }
+  function renderMonthPdfPreview(){
+    var ym = $('monthPdfSelect').value, list = monthInvoices(ym);
+    var total = list.reduce(function(a,i){ return a + invoiceTotal(i); }, 0);
+    $('monthPdfSummary').textContent = list.length
+      ? list.length + ' invoice' + (list.length===1?'':'s') + ' · ' + money(total) + ' · ' + fmtMonth(ym)
+      : '';
+    $('monthPdfDownload').disabled = !list.length;
+    $('monthPdfPreview').innerHTML = list.length
+      ? list.map(function(i){ return '<div class="mp-page">' + buildInvoiceSheetHtml(i).replace(/ id="invoicePaper"/g,'') + '</div>'; }).join('')
+      : '<div class="mp-empty">No invoices in ' + esc(fmtMonth(ym)) + '.</div>';
+  }
+  function buildMonthPdf(list, onProgress){
+    if(!window.html2pdf) return Promise.reject(new Error('PDF engine unavailable'));
+    var host = document.createElement('div');
+    host.id = 'monthPdfRender';
+    document.body.appendChild(host);
+    var opt = {
+      margin: 0,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true, scrollY: 0 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: 'avoid-all' }
+    };
+    function paperFor(inv){
+      host.innerHTML = buildInvoiceSheetHtml(inv);
+      var el = host.querySelector('.exact-invoice-paper');
+      el.style.boxShadow = 'none';
+      return el;
+    }
+    var pdf = null;
+    var chain = Promise.resolve();
+    list.forEach(function(inv, idx){
+      chain = chain.then(function(){
+        var el = paperFor(inv);
+        if(idx === 0){
+          // first invoice: html2pdf builds the jsPDF document (page 1)
+          return window.html2pdf().set(opt).from(el).toPdf().get('pdf').then(function(doc){ pdf = doc; });
+        }
+        return window.html2pdf().set(opt).from(el).toCanvas().get('canvas').then(function(canvas){
+          var w = pdf.internal.pageSize.getWidth(), h = pdf.internal.pageSize.getHeight();
+          pdf.addPage();
+          pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, w, Math.min(h, canvas.height * w / canvas.width));
+        });
+      }).then(function(){ if(onProgress) onProgress(idx + 1, list.length); });
+    });
+    return chain.then(function(){ host.remove(); return pdf; }, function(err){ host.remove(); throw err; });
+  }
+  $('btnMonthPdf').addEventListener('click', function(){
+    fillMonthPdfSelect();
+    renderMonthPdfPreview();
+    $('monthPdfOverlay').hidden = false;
+  });
+  $('monthPdfSelect').addEventListener('change', renderMonthPdfPreview);
+  $('monthPdfClose').addEventListener('click', function(){ $('monthPdfOverlay').hidden = true; $('monthPdfPreview').innerHTML = ''; });
+  $('monthPdfOverlay').addEventListener('click', function(e){ if(e.target === $('monthPdfOverlay')) $('monthPdfClose').click(); });
+  $('monthPdfDownload').addEventListener('click', function(){
+    var btn = $('monthPdfDownload'), ym = $('monthPdfSelect').value, list = monthInvoices(ym);
+    if(!list.length) return;
+    var label = btn.textContent;
+    btn.disabled = true;
+    buildMonthPdf(list, function(n, total){ btn.textContent = 'Building ' + n + '/' + total + '…'; })
+      .then(function(pdf){ pdf.save('Invoices-' + ym + '.pdf'); })
+      .catch(function(err){ console.error(err); showBanner('Could not build the monthly PDF: ' + (err && err.message ? err.message : 'unknown error')); })
+      .then(function(){ btn.textContent = label; btn.disabled = false; });
+  });
+
   function shareMessageFor(rec, c, ps){
     if(previewKind === 'cash'){
       return 'Hi ' + (c.name || '') + ', here is your cash receipt ' + (rec.number||'') + ' dated ' + fmtDate(rec.date) +
