@@ -234,11 +234,7 @@ td.num, th.num{text-align:right;}
 .bottom-nav{display:none;}
 
 .preview-modal{max-width:780px;padding:22px;}
-.month-pdf-preview{max-height:62vh;overflow:auto;background:#e9e4d9;border-radius:8px;padding:12px;}
-.month-pdf-preview .mp-page{zoom:.6;margin:0 auto 14px;width:210mm;}
-.month-pdf-preview .mp-page .exact-invoice-paper{margin:0 auto;}
-.month-pdf-preview .mp-empty{padding:30px 10px;text-align:center;color:#6b6356;}
-#monthPdfRender{position:absolute;left:-99999px;top:0;width:210mm;}
+#invZipRender{position:absolute;left:-99999px;top:0;width:210mm;}
 .preview-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap;}
 .preview-toolbar h2{font-size:16px;}
 .invoice-sheet{background:transparent !important;color:#1c1a17;border:none !important;border-radius:0 !important;padding:0 !important;font-size:12.5px;line-height:1.5;box-shadow:none !important;}
@@ -987,7 +983,6 @@ button.chip:hover{filter:brightness(0.95);}
           <div class="desc">Every invoice you've issued.</div>
         </div>
         <div class="actions">
-          <button class="btn" id="btnMonthPdf">Download month invoices</button>
           <button class="btn primary" id="btnNewInvoice">+ New invoice</button>
         </div>
       </div>
@@ -1001,6 +996,7 @@ button.chip:hover{filter:brightness(0.95);}
             <label class="date-filter">From <input type="date" class="select" id="invDateFrom" aria-label="From date"></label>
             <label class="date-filter">To <input type="date" class="select" id="invDateTo" aria-label="To date"></label>
             <button class="btn ghost small" id="invDateClear" type="button" hidden>Clear dates</button>
+            <button class="btn primary small" id="btnInvZip" type="button" title="Download the invoices shown below as individual PDFs in one ZIP">Download ZIP</button>
             <select class="select" id="statusFilter">
               <option value="">All statuses</option>
               <option value="paid">Paid</option>
@@ -1296,21 +1292,6 @@ button.chip:hover{filter:brightness(0.95);}
       </div>
     </div>
     <div id="invoiceSheet" class="invoice-sheet"></div>
-  </div>
-</div>
-
-<div class="overlay" id="monthPdfOverlay" hidden>
-  <div class="modal preview-modal">
-    <div class="preview-toolbar no-print">
-      <h2>Monthly invoices (ZIP of PDFs)</h2>
-      <div class="actions">
-        <select class="select" id="monthPdfSelect" aria-label="Month"></select>
-        <button class="btn ghost small" id="monthPdfClose">Close</button>
-        <button class="btn primary small" id="monthPdfDownload">Download ZIP</button>
-      </div>
-    </div>
-    <div class="desc" id="monthPdfSummary" style="margin:8px 0 12px;"></div>
-    <div id="monthPdfPreview" class="month-pdf-preview"></div>
   </div>
 </div>
 
@@ -1694,6 +1675,7 @@ button.chip:hover{filter:brightness(0.95);}
   var formPayments = [];
   var previewRecordId = null;
   var previewKind = 'invoice';
+  var visibleInvoices = [];
   var downloadsCap = null;
 
   var $ = function(id){ return document.getElementById(id); };
@@ -2039,6 +2021,9 @@ button.chip:hover{filter:brightness(0.95);}
       return matchesQ && matchesStatus;
     }).sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
 
+    visibleInvoices = rows;
+    $('btnInvZip').disabled = !rows.length;
+    $('btnInvZip').textContent = rows.length ? 'Download ZIP (' + rows.length + ')' : 'Download ZIP';
     $('invoicesEmpty').style.display = invoices.length ? 'none' : 'flex';
     $('invoicesTableBody').innerHTML = rows.map(function(inv){
       var ps = getPaymentStatus(inv);
@@ -3004,39 +2989,14 @@ button.chip:hover{filter:brightness(0.95);}
       throw err;
     });
   }
-  // ---- Monthly invoices -> one PDF ----
-  function monthInvoices(ym){
-    return invoices.filter(function(i){ return (i.date||'').slice(0,7) === ym; })
-      .sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || String(a.number||'').localeCompare(String(b.number||''), undefined, {numeric:true}); });
-  }
-  function fillMonthPdfSelect(){
-    var sel = $('monthPdfSelect'), keep = sel.value;
-    var set = {};
-    invoices.forEach(function(i){ if(i.date) set[i.date.slice(0,7)] = 1; });
-    var now = new Date(), cur = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-    set[cur] = 1;
-    var list = Object.keys(set).sort().reverse();
-    sel.innerHTML = list.map(function(m){ return '<option value="'+m+'">'+esc(fmtMonth(m))+' ('+monthInvoices(m).length+')</option>'; }).join('');
-    sel.value = (keep && set[keep]) ? keep : cur;
-  }
-  function renderMonthPdfPreview(){
-    var ym = $('monthPdfSelect').value, list = monthInvoices(ym);
-    var total = list.reduce(function(a,i){ return a + invoiceTotal(i); }, 0);
-    $('monthPdfSummary').textContent = list.length
-      ? list.length + ' invoice' + (list.length===1?'':'s') + ' · ' + money(total) + ' · ' + fmtMonth(ym)
-      : '';
-    $('monthPdfDownload').disabled = !list.length;
-    $('monthPdfPreview').innerHTML = list.length
-      ? list.map(function(i){ return '<div class="mp-page">' + buildInvoiceSheetHtml(i).replace(/ id="invoicePaper"/g,'') + '</div>'; }).join('')
-      : '<div class="mp-empty">No invoices in ' + esc(fmtMonth(ym)) + '.</div>';
-  }
+  // ---- Selected invoices -> ZIP of individual PDFs ----
   function safeFileName(str){
     return String(str||'').replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim();
   }
-  function buildMonthZip(list, onProgress){
+  function buildInvoicesZip(list, onProgress){
     if(!window.html2pdf || !window.JSZip) return Promise.reject(new Error('PDF/ZIP engine unavailable'));
     var host = document.createElement('div');
-    host.id = 'monthPdfRender';
+    host.id = 'invZipRender';
     document.body.appendChild(host);
     var opt = {
       margin: 0,
@@ -3064,29 +3024,27 @@ button.chip:hover{filter:brightness(0.95);}
     });
     return chain.then(function(){ host.remove(); return zip.generateAsync({type:'blob'}); }, function(err){ host.remove(); throw err; });
   }
-  $('btnMonthPdf').addEventListener('click', function(){
-    fillMonthPdfSelect();
-    renderMonthPdfPreview();
-    $('monthPdfOverlay').hidden = false;
-  });
-  $('monthPdfSelect').addEventListener('change', renderMonthPdfPreview);
-  $('monthPdfClose').addEventListener('click', function(){ $('monthPdfOverlay').hidden = true; $('monthPdfPreview').innerHTML = ''; });
-  $('monthPdfOverlay').addEventListener('click', function(e){ if(e.target === $('monthPdfOverlay')) $('monthPdfClose').click(); });
-  $('monthPdfDownload').addEventListener('click', function(){
-    var btn = $('monthPdfDownload'), ym = $('monthPdfSelect').value, list = monthInvoices(ym);
+  $('btnInvZip').addEventListener('click', function(){
+    var btn = $('btnInvZip'), list = visibleInvoices.slice();
     if(!list.length) return;
+    var from = $('invDateFrom').value, to = $('invDateTo').value;
+    var fname = 'Invoices-' + (from && to ? from + '_to_' + to : from ? 'from-' + from : to ? 'until-' + to : 'all');
+    var qTxt = safeFileName($('invoiceSearch').value);
+    if($('statusFilter').value) fname += '-' + $('statusFilter').value;
+    if(qTxt) fname += '-' + qTxt;
+    fname += '.zip';
     var label = btn.textContent;
     btn.disabled = true;
-    buildMonthZip(list, function(n, total){ btn.textContent = 'Building ' + n + '/' + total + '…'; })
+    buildInvoicesZip(list, function(n, total){ btn.textContent = 'Building ' + n + '/' + total + '…'; })
       .then(function(blob){
         var a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'Invoices-' + ym + '.zip';
+        a.download = fname;
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(function(){ URL.revokeObjectURL(a.href); }, 5000);
       })
-      .catch(function(err){ console.error(err); showBanner('Could not build the monthly ZIP: ' + (err && err.message ? err.message : 'unknown error')); })
-      .then(function(){ btn.textContent = label; btn.disabled = false; });
+      .catch(function(err){ console.error(err); showBanner('Could not build the ZIP: ' + (err && err.message ? err.message : 'unknown error')); })
+      .then(function(){ btn.textContent = label; btn.disabled = !visibleInvoices.length; });
   });
 
   function shareMessageFor(rec, c, ps){

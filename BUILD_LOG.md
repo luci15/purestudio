@@ -305,3 +305,14 @@ Request: ship the password security with rate limiting; ask for the password on 
 - Invoices page: **From / To date** filters beside the status filter (combine with search + status); "Clear dates" appears when a date is set.
 - "Download month invoices" popup (month dropdown + preview kept) now downloads **`Invoices-YYYY-MM.zip`** with one PDF per invoice, named `<invoice no> - <client>.pdf` (illegal filename characters replaced, duplicate names get ` (2)`). Uses JSZip 3.10.1 from cdnjs; button shows n/total progress.
 - Tests (Chrome, local mode): date filter 4 → 1 → 2 → 4 rows, clear works; ZIP valid with 3 correctly named PDFs for the month ("Acme Pvt/Ltd" → "Acme Pvt-Ltd"); no JS errors. Not committed/pushed yet.
+
+## 2026-11-02 — Invoices: "Download ZIP" next to the date filter (month popup removed)
+
+- Removed the "Download month invoices" button and its month popup/preview.
+- New **Download ZIP (n)** button sits next to the From/To date boxes. It zips exactly the invoices currently listed (date range + search + status filters all apply) as individual PDFs named `<invoice no> - <client>.pdf`. ZIP name reflects the range: `Invoices-<from>_to_<to>.zip` (`from-…` / `until-…` / `all` when only one or no date is set). Disabled when nothing is listed; shows n/total progress while building.
+- Tests (Chrome, local mode): range 5th–25th → ZIP with exactly INV-2 and INV-3, valid; empty range → button disabled; old popup gone; no JS errors.
+
+## 2026-11-02 — ZIP download verified across all filter combinations
+
+- Download ZIP uses the same filtered list as the table: date range, status and name/invoice-# search work alone or combined. ZIP file name now also carries the status and search text (e.g. `Invoices-2026-11-01_to_2026-11-30-pending-acme.zip`, `Invoices-all-paid.zip`).
+- Tests (Chrome, 5 invoices): dates → 4; dates+pending → 2; dates+pending+name → 1; name only → 3; paid only → 2. Each ZIP's contents matched the rows shown. No JS errors. Not pushed yet.

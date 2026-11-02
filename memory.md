@@ -40,3 +40,5 @@ Single `index.html` (inline CSS + JS) + `supabase-adapter.js` (Firestore-like wr
 - 2026-11-02 — **Monthly invoices PDF**: Invoices page "Download month PDF" (month dropdown, stacked preview, one PDF, one invoice/page). `buildInvoiceSheetHtml` shared with single preview. GST invoices only. Verified in Chrome via Playwright.
 - 2026-11-02 — Dashboard **GST to pay — <month>** tile (CGST/SGST/IGST sum of month invoices, follows month picker). Verified in Chrome.
 - 2026-11-02 — Invoices **From/To date filter**; month download is now a **ZIP of per-invoice PDFs** named "<no> - <client>.pdf" (JSZip from cdnjs). Verified in Chrome; not pushed.
+- 2026-11-02 — Month popup removed; **Download ZIP (n)** button beside the date filter zips the currently listed invoices (dates+search+status) as per-invoice PDFs. Verified in Chrome; not pushed.
+- 2026-11-02 — ZIP name includes status/search; verified date/status/name filters work alone and combined. Not pushed.
