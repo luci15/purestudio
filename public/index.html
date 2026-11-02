@@ -6,6 +6,7 @@
 <title>Pure Studio</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="supabase-adapter.js"></script>
 <style>
 :root{
@@ -142,6 +143,7 @@ td.num, th.num{text-align:right;}
 
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
 .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.date-filter{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-muted);font-weight:600;}
 .select{border:1px solid var(--border);background:var(--surface);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;color:var(--ink);}
 
 .overlay{position:fixed;inset:0;background:rgba(20,17,12,0.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;animation:fade-in 0.15s ease-out;}
@@ -985,7 +987,7 @@ button.chip:hover{filter:brightness(0.95);}
           <div class="desc">Every invoice you've issued.</div>
         </div>
         <div class="actions">
-          <button class="btn" id="btnMonthPdf">Download month PDF</button>
+          <button class="btn" id="btnMonthPdf">Download month invoices</button>
           <button class="btn primary" id="btnNewInvoice">+ New invoice</button>
         </div>
       </div>
@@ -996,6 +998,9 @@ button.chip:hover{filter:brightness(0.95);}
             <input type="text" id="invoiceSearch" placeholder="Search by client or invoice #">
           </div>
           <div class="filters">
+            <label class="date-filter">From <input type="date" class="select" id="invDateFrom" aria-label="From date"></label>
+            <label class="date-filter">To <input type="date" class="select" id="invDateTo" aria-label="To date"></label>
+            <button class="btn ghost small" id="invDateClear" type="button" hidden>Clear dates</button>
             <select class="select" id="statusFilter">
               <option value="">All statuses</option>
               <option value="paid">Paid</option>
@@ -1297,11 +1302,11 @@ button.chip:hover{filter:brightness(0.95);}
 <div class="overlay" id="monthPdfOverlay" hidden>
   <div class="modal preview-modal">
     <div class="preview-toolbar no-print">
-      <h2>Monthly invoices PDF</h2>
+      <h2>Monthly invoices (ZIP of PDFs)</h2>
       <div class="actions">
         <select class="select" id="monthPdfSelect" aria-label="Month"></select>
         <button class="btn ghost small" id="monthPdfClose">Close</button>
-        <button class="btn primary small" id="monthPdfDownload">Download PDF</button>
+        <button class="btn primary small" id="monthPdfDownload">Download ZIP</button>
       </div>
     </div>
     <div class="desc" id="monthPdfSummary" style="margin:8px 0 12px;"></div>
@@ -2024,7 +2029,11 @@ button.chip:hover{filter:brightness(0.95);}
   function renderInvoices(){
     var q = ($('invoiceSearch').value || '').toLowerCase();
     var status = $('statusFilter').value;
+    var dFrom = $('invDateFrom').value, dTo = $('invDateTo').value;
+    $('invDateClear').hidden = !(dFrom || dTo);
     var rows = invoices.filter(function(inv){
+      if(dFrom && (inv.date||'') < dFrom) return false;
+      if(dTo && (inv.date||'') > dTo) return false;
       var matchesQ = !q || (inv.clientName||'').toLowerCase().indexOf(q) !== -1 || (inv.number||'').toLowerCase().indexOf(q) !== -1;
       var matchesStatus = !status || getPaymentStatus(inv).key === status;
       return matchesQ && matchesStatus;
@@ -2190,6 +2199,9 @@ button.chip:hover{filter:brightness(0.95);}
   $('clientSort').addEventListener('change', renderClients);
   $('invoiceSearch').addEventListener('input', debounce(renderInvoices, 120));
   $('statusFilter').addEventListener('change', renderInvoices);
+  $('invDateFrom').addEventListener('change', renderInvoices);
+  $('invDateTo').addEventListener('change', renderInvoices);
+  $('invDateClear').addEventListener('click', function(){ $('invDateFrom').value = ''; $('invDateTo').value = ''; renderInvoices(); });
   $('cashSearch').addEventListener('input', debounce(renderCash, 120));
 
   document.body.addEventListener('click', function(e){
@@ -3018,8 +3030,11 @@ button.chip:hover{filter:brightness(0.95);}
       ? list.map(function(i){ return '<div class="mp-page">' + buildInvoiceSheetHtml(i).replace(/ id="invoicePaper"/g,'') + '</div>'; }).join('')
       : '<div class="mp-empty">No invoices in ' + esc(fmtMonth(ym)) + '.</div>';
   }
-  function buildMonthPdf(list, onProgress){
-    if(!window.html2pdf) return Promise.reject(new Error('PDF engine unavailable'));
+  function safeFileName(str){
+    return String(str||'').replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim();
+  }
+  function buildMonthZip(list, onProgress){
+    if(!window.html2pdf || !window.JSZip) return Promise.reject(new Error('PDF/ZIP engine unavailable'));
     var host = document.createElement('div');
     host.id = 'monthPdfRender';
     document.body.appendChild(host);
@@ -3030,29 +3045,24 @@ button.chip:hover{filter:brightness(0.95);}
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       pagebreak: { mode: 'avoid-all' }
     };
-    function paperFor(inv){
-      host.innerHTML = buildInvoiceSheetHtml(inv);
-      var el = host.querySelector('.exact-invoice-paper');
-      el.style.boxShadow = 'none';
-      return el;
-    }
-    var pdf = null;
+    var zip = new window.JSZip(), used = {};
     var chain = Promise.resolve();
     list.forEach(function(inv, idx){
       chain = chain.then(function(){
-        var el = paperFor(inv);
-        if(idx === 0){
-          // first invoice: html2pdf builds the jsPDF document (page 1)
-          return window.html2pdf().set(opt).from(el).toPdf().get('pdf').then(function(doc){ pdf = doc; });
-        }
-        return window.html2pdf().set(opt).from(el).toCanvas().get('canvas').then(function(canvas){
-          var w = pdf.internal.pageSize.getWidth(), h = pdf.internal.pageSize.getHeight();
-          pdf.addPage();
-          pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, w, Math.min(h, canvas.height * w / canvas.width));
+        host.innerHTML = buildInvoiceSheetHtml(inv);
+        var el = host.querySelector('.exact-invoice-paper');
+        el.style.boxShadow = 'none';
+        return window.html2pdf().set(opt).from(el).toPdf().output('blob').then(function(blob){
+          var base = safeFileName((inv.number || 'draft') + ' - ' + (inv.clientName || 'Client')) || ('Invoice ' + (idx + 1));
+          var name = base + '.pdf', n = 2;
+          while(used[name.toLowerCase()]) name = base + ' (' + (n++) + ').pdf';
+          used[name.toLowerCase()] = 1;
+          zip.file(name, blob);
+          if(onProgress) onProgress(idx + 1, list.length);
         });
-      }).then(function(){ if(onProgress) onProgress(idx + 1, list.length); });
+      });
     });
-    return chain.then(function(){ host.remove(); return pdf; }, function(err){ host.remove(); throw err; });
+    return chain.then(function(){ host.remove(); return zip.generateAsync({type:'blob'}); }, function(err){ host.remove(); throw err; });
   }
   $('btnMonthPdf').addEventListener('click', function(){
     fillMonthPdfSelect();
@@ -3067,9 +3077,15 @@ button.chip:hover{filter:brightness(0.95);}
     if(!list.length) return;
     var label = btn.textContent;
     btn.disabled = true;
-    buildMonthPdf(list, function(n, total){ btn.textContent = 'Building ' + n + '/' + total + '…'; })
-      .then(function(pdf){ pdf.save('Invoices-' + ym + '.pdf'); })
-      .catch(function(err){ console.error(err); showBanner('Could not build the monthly PDF: ' + (err && err.message ? err.message : 'unknown error')); })
+    buildMonthZip(list, function(n, total){ btn.textContent = 'Building ' + n + '/' + total + '…'; })
+      .then(function(blob){
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'Invoices-' + ym + '.zip';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); }, 5000);
+      })
+      .catch(function(err){ console.error(err); showBanner('Could not build the monthly ZIP: ' + (err && err.message ? err.message : 'unknown error')); })
       .then(function(){ btn.textContent = label; btn.disabled = false; });
   });
 

@@ -299,3 +299,9 @@ Request: ship the password security with rate limiting; ask for the password on 
 - New tile **GST to pay — <month>** after Expenses: sum of CGST + SGST + IGST across every invoice dated in the selected month, with the CGST / SGST / IGST split underneath. Follows the Month picker.
 - Uses `computeTotals(inv)` per invoice, so interstate (IGST) and in-state (CGST+SGST) are each counted correctly. Cash entries carry no GST and are excluded. Not net of input credit (not requested).
 - Tests (Chrome, local mode): Nov → ₹1,350 (450/450/450), Oct → ₹162 (81/81/0), switches with the picker, no JS errors.
+
+## 2026-11-02 — Invoices: date filter + month download as ZIP of individual PDFs
+
+- Invoices page: **From / To date** filters beside the status filter (combine with search + status); "Clear dates" appears when a date is set.
+- "Download month invoices" popup (month dropdown + preview kept) now downloads **`Invoices-YYYY-MM.zip`** with one PDF per invoice, named `<invoice no> - <client>.pdf` (illegal filename characters replaced, duplicate names get ` (2)`). Uses JSZip 3.10.1 from cdnjs; button shows n/total progress.
+- Tests (Chrome, local mode): date filter 4 → 1 → 2 → 4 rows, clear works; ZIP valid with 3 correctly named PDFs for the month ("Acme Pvt/Ltd" → "Acme Pvt-Ltd"); no JS errors. Not committed/pushed yet.

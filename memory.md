@@ -39,3 +39,4 @@ Single `index.html` (inline CSS + JS) + `supabase-adapter.js` (Firestore-like wr
 - 2026-10-30 — Eye (show/hide) button on all password boxes on the sign-in layer. Tests eye 17/17, password flow 35/35.
 - 2026-11-02 — **Monthly invoices PDF**: Invoices page "Download month PDF" (month dropdown, stacked preview, one PDF, one invoice/page). `buildInvoiceSheetHtml` shared with single preview. GST invoices only. Verified in Chrome via Playwright.
 - 2026-11-02 — Dashboard **GST to pay — <month>** tile (CGST/SGST/IGST sum of month invoices, follows month picker). Verified in Chrome.
+- 2026-11-02 — Invoices **From/To date filter**; month download is now a **ZIP of per-invoice PDFs** named "<no> - <client>.pdf" (JSZip from cdnjs). Verified in Chrome; not pushed.
